@@ -10,7 +10,7 @@ To subscribe, just send the command `/start`. To unsubscribe, send the command `
 
 Below is an example of an alert sent by the bot:
 
-![Sample Telegram Bot Alert screenshot](https://i.ibb.co/NghFNsk/Screenshot-20200402-000351.jpg "Sample Telegram alert")
+![Sample Telegram Bot Alert screenshot](https://i.ibb.co/V3hQLwV/Screenshot-20200402-000351.jpg "Sample Telegram alert")
 
 ## Alert Updates
 

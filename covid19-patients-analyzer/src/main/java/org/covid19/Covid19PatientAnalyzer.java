@@ -67,7 +67,7 @@ public class Covid19PatientAnalyzer {
                 .leftJoin(postedMessages, (latestPatientInfo, patientAndMessage) -> {
                     // this is a new patient, not alerted before
                     if (Objects.isNull(patientAndMessage)) {
-                        LOG.info("Found new patient number (not alerted before {}", latestPatientInfo.getPatientNumber());
+                        LOG.info("Found new patient number (not alerted before {})", latestPatientInfo.getPatientNumber());
                         return new PatientAndMessage(null, latestPatientInfo);
                     }
                     // determine if there is any new information since last update
@@ -78,8 +78,6 @@ public class Covid19PatientAnalyzer {
                     }
                     return null;
                 })
-                .peek((patientNumber, patientAndMessage) ->
-                        LOG.info("Patient number {} processed with PatientAndMessage {}", patientNumber, patientAndMessage))
                 // filter out unchanged/irrelevant patient information
                 .filter((patientNumber, patientAndMessage) -> Objects.nonNull(patientAndMessage))
                 .peek((patientNumber, patientAndMessage) ->

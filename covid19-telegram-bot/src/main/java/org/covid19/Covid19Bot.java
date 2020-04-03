@@ -69,8 +69,8 @@ public class Covid19Bot extends AbilityBot {
                     silent.send(message, ctx.chatId());
                 })
                 .post(ctx -> {
-                    String message = String.format("User %s with id %d (re)subscribed to Covid19 India Patient alerts",
-                            ctx.user().getUserName(), ctx.user().getId());
+                    String message = String.format("User %s %s with id %d (re)subscribed to Covid19 India Patient alerts",
+                            ctx.user().getFirstName(), ctx.user().getLastName(), ctx.user().getId());
                     silent.send(message, CHANNEL_ID);
                 })
                 .build();

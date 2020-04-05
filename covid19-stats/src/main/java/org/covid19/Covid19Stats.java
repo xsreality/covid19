@@ -3,6 +3,7 @@ package org.covid19;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -13,11 +14,13 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
+import org.apache.kafka.streams.state.KeyValueStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Properties;
 
+import static java.lang.Long.parseLong;
 import static java.util.Objects.isNull;
 import static java.util.Objects.nonNull;
 
@@ -48,6 +51,8 @@ public class Covid19Stats {
         final Serde<String> stringSerde = Serdes.String();
         final Serde<Long> longSerde = Serdes.Long();
         final Serde<PatientAndMessage> patientAndMessageSerde = new PatientAndMessageSerde();
+        final Serde<StatewiseStats> statewiseStatsSerde = new StatewiseStatsSerde();
+        final Serde<StatewiseDelta> statewiseDeltaSerde = new StatewiseDeltaSerde();
 
         final StreamsBuilder builder = new StreamsBuilder();
 
@@ -76,7 +81,38 @@ public class Covid19Stats {
                 .peek((key, value) -> LOG.info("Status: {}, Count: {}", key, value))
                 .to(KAFKA_TOPIC_PATIENT_STATUS_COUNT, Produced.with(stringSerde, longSerde));
 
+
+        // build the statewise delta stats of recovery, death and confirmed Covid19 cases
+        // This KTable is read by covid19-telegram-bot to send statewise delta updates
+        builder.table("statewise-data",
+                Materialized.<String, StatewiseStats, KeyValueStore<Bytes, byte[]>>as("ignored")
+                        .withKeySerde(stringSerde).withValueSerde(statewiseStatsSerde)
+                        .withLoggingDisabled())
+                .groupBy(KeyValue::pair, Grouped.with(stringSerde, statewiseStatsSerde))
+                .aggregate(StatewiseDelta::new, (state, newStatewiseStats, aggregate) -> {
+                            // update deltas
+                            aggregate.setDeltaRecovered(parseLong(newStatewiseStats.getRecovered()) - aggregate.getCurrentRecovered());
+                            aggregate.setDeltaDeaths(parseLong(newStatewiseStats.getDeaths()) - aggregate.getCurrentDeaths());
+                            aggregate.setDeltaConfirmed(parseLong(newStatewiseStats.getConfirmed()) - aggregate.getCurrentConfirmed());
+
+                            // update current values
+                            aggregate.setCurrentRecovered(parseLong(newStatewiseStats.getRecovered()));
+                            aggregate.setCurrentDeaths(parseLong(newStatewiseStats.getDeaths()));
+                            aggregate.setCurrentConfirmed(parseLong(newStatewiseStats.getConfirmed()));
+
+                            // update metadata
+                            aggregate.setLastUpdatedTime(newStatewiseStats.getLastUpdatedTime());
+                            aggregate.setState(state);
+                            return aggregate;
+                        }, (state, oldStatewiseStats, aggregate) -> aggregate,
+                        Materialized.<String, StatewiseDelta, KeyValueStore<Bytes, byte[]>>as("statewise-delta")
+                                .withKeySerde(stringSerde)
+                                .withValueSerde(statewiseDeltaSerde));
+
+
         final KafkaStreams streams = new KafkaStreams(builder.build(), streamsConfiguration);
+
+        LOG.info("{}", builder.build().describe());
 
         streams.start();
 

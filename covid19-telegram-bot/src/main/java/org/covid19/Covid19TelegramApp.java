@@ -3,12 +3,18 @@ package org.covid19;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Consumed;
+import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KStream;
+import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
+import org.apache.kafka.streams.state.KeyValueStore;
 import org.jetbrains.annotations.NotNull;
 import org.mapdb.DB;
 import org.mapdb.DBMaker;
@@ -22,10 +28,12 @@ import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import java.io.File;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
 import static java.util.Objects.isNull;
@@ -56,12 +64,23 @@ public class Covid19TelegramApp {
 
         final Serde<String> stringSerde = Serdes.String();
         final Serde<PatientAndMessage> patientAndMessageSerde = new PatientAndMessageSerde();
+        final Serde<StatewiseDelta> statewiseDeltaSerde = new StatewiseDeltaSerde();
+        final Serde<ArrayList<StatewiseDelta>> statewiseDeltaArrayListSerde = new StatewiseDeltaListSerde();
 
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<String, PatientAndMessage> alerts = builder.stream(STREAM_ALERTS,
                 Consumed.with(stringSerde, patientAndMessageSerde));
 
+//        final KStream<String, StatewiseDelta> statewiseDeltaStream =
+//                builder.stream("org.covid19.patient-status-stats-statewise-delta-changelog",
+//                        Consumed.with(stringSerde, statewiseDeltaSerde));
+
+        final KTable<String, StatewiseDelta> statewiseDeltaTable = builder
+                .table("org.covid19.patient-status-stats-statewise-delta-changelog",
+                        Materialized.with(stringSerde, statewiseDeltaSerde));
+
+        // send telegram messages to all subscribers from alerts topic
         alerts
                 .peek((patientNumber, patientAndMessage) ->
                         LOG.info("Found new alert for patient #{}. Details: {}", patientNumber, patientAndMessage))
@@ -103,12 +122,137 @@ public class Covid19TelegramApp {
                 .filter((patientNumber, patientAndMessage) -> nonNull(patientAndMessage))
                 .to(STREAM_POSTED_MESSAGES, Produced.with(stringSerde, patientAndMessageSerde));
 
-        final KafkaStreams streams = new KafkaStreams(builder.build(), streamsConfiguration);
+        // build topology for processing statewise stats and sending Telegram Alerts
+        statewiseDeltaTable
+                .groupBy((key, value) -> KeyValue.pair("1", value), Grouped.with(stringSerde, statewiseDeltaSerde))
+                .aggregate(ArrayList::new,
+                        (key, newDelta, aggregate) -> { // build arraylist in adder
+                            aggregate.add(newDelta);
+                            return aggregate;
+                        },
+                        (key, oldDelta, aggregate) -> aggregate, // no-op in subtractor
+                        Materialized.<String, ArrayList<StatewiseDelta>, KeyValueStore<Bytes, byte[]>>as("collection")
+                                .withKeySerde(stringSerde)
+                                .withValueSerde(statewiseDeltaArrayListSerde))
+                .toStream()
+                .foreach((key, deltas) -> fireStatewiseTelegramAlert(covid19Bot, deltas));
+
+        // send telegram messages for statewise delta changes of recovered, deaths and confirmed cases
+//        statewiseDeltaStream
+//                .peek((key, value) -> LOG.info("processing stream key {}, value {}", key, value))
+//                .selectKey((key, value) -> "1")
+//                .groupByKey(Grouped.with(stringSerde, statewiseDeltaSerde))
+//                .aggregate(ArrayList::new, (key, newDelta, aggregate) -> {
+//                    // search the list of deltas to check if new delta
+//                    // is for an existing state. If found, sum the delta values
+//                    AtomicBoolean found = new AtomicBoolean(false);
+//                    aggregate.forEach(delta -> {
+//                        if (delta.getState().equalsIgnoreCase(newDelta.getState())) {
+//                            found.set(true);
+//                            delta.setDeltaRecovered(delta.getDeltaRecovered() + newDelta.getDeltaRecovered());
+//                            delta.setDeltaDeaths(delta.getDeltaDeaths() + newDelta.getDeltaDeaths());
+//                            delta.setDeltaConfirmed(delta.getDeltaConfirmed() + newDelta.getDeltaConfirmed());
+//                        }
+//                    });
+//                    // if not found, it is a new Indian State in the window so add it to the list.
+//                    if (!found.get()) {
+//                        aggregate.add(newDelta);
+//                    }
+//                    return aggregate;
+//                }, Materialized.<String, ArrayList<StatewiseDelta>, KeyValueStore<Bytes, byte[]>>as("30-secs-window")
+//                        .withKeySerde(stringSerde)
+//                        .withValueSerde(statewiseDeltaArrayListSerde))
+//                .toStream()
+//                .peek((key, deltas) -> {
+//                    deltas.forEach(delta -> {
+//                        LOG.info("State: {}, deltaRecovered: {}, deltaDeaths: {}, deltaConfirmed: {}",
+//                                delta.getState(), delta.getDeltaRecovered(), delta.getDeltaDeaths(), delta.getDeltaConfirmed());
+//                    });
+//                })
+//                .foreach((key, deltas) -> {
+//                    // build alert text and send telegram update
+//                    AtomicReference<String> updateText = new AtomicReference<>("");
+//                    deltas.forEach(delta -> {
+//                        // skip total
+//                        if ("total".equalsIgnoreCase(delta.getState())) {
+//                            return;
+//                        }
+//
+//                        boolean include = false;
+//                        String textLine = "";
+//                        if (delta.getDeltaConfirmed() > 0L) {
+//                            include = true;
+//                            textLine = textLine.concat(String.format("%d new cases ", delta.getDeltaConfirmed()));
+//                        }
+//                        if (delta.getDeltaDeaths() > 0L) {
+//                            include = true;
+//                            textLine = textLine.concat(String.format("%d death(s) ", delta.getDeltaDeaths()));
+//                        }
+//                        if (delta.getDeltaRecovered() > 0L) {
+//                            include = true;
+//                            textLine = textLine.concat(String.format("%d recovery ", delta.getDeltaRecovered()));
+//                        }
+//                        if (include) {
+//                            textLine = textLine.concat(String.format("in %s\n", delta.getState()));
+//                        }
+////                        LOG.info("textLine is: {}", textLine);
+//                        updateText.accumulateAndGet(textLine, (current, update) -> current + update);
+////                        LOG.info("updateText is: {}", updateText);
+//                    });
+//
+////                    sendTelegramAlert(covid19Bot, TELEGRAM_CREATOR_ID, updateText.get(), null);
+//                    LOG.info("Sending alert with text: {}", updateText.get());
+//                });
+
+
+        final KafkaStreams streams = new KafkaStreams(builder.build(streamsConfiguration), streamsConfiguration);
+
+        // open keyvalue store for reading total statewise stats
+//        final ReadOnlyKeyValueStore<String, StatewiseStats> statewiseStore = streams.store("statewise-data", QueryableStoreTypes.keyValueStore());
+//        if (isNull(statewiseStore)) {
+//            throw new IllegalStateException("Unable to open store statewise data");
+//        }
+
+        LOG.info("{}", builder.build().describe());
 
         streams.start();
 
         // Add shutdown hook to respond to SIGTERM and gracefully close Kafka Streams
         Runtime.getRuntime().addShutdownHook(new Thread(streams::close));
+    }
+
+    private static void fireStatewiseTelegramAlert(Covid19Bot covid19Bot, ArrayList<StatewiseDelta> deltas) {
+        // build alert text and send telegram update
+        AtomicReference<String> updateText = new AtomicReference<>("");
+        deltas.forEach(delta -> buildStatewiseAlertText(updateText, delta));
+        String lastUpdated = deltas.get(0).getLastUpdatedTime();
+        sendTelegramAlert(covid19Bot, TELEGRAM_CREATOR_ID, lastUpdated + "\n\n" + updateText.get(), null);
+    }
+
+    private static void buildStatewiseAlertText(AtomicReference<String> updateText, StatewiseDelta delta) {
+        // skip total
+        if ("total".equalsIgnoreCase(delta.getState())) {
+            return;
+        }
+
+        boolean include = false;
+        String textLine = "";
+        if (delta.getDeltaConfirmed() > 0L) {
+            include = true;
+            textLine = textLine.concat(String.format("%d new case(s) ", delta.getDeltaConfirmed()));
+        }
+        if (delta.getDeltaDeaths() > 0L) {
+            include = true;
+            textLine = textLine.concat(String.format("%d death(s) ", delta.getDeltaDeaths()));
+        }
+        if (delta.getDeltaRecovered() > 0L) {
+            include = true;
+            textLine = textLine.concat(String.format("%d recovered ", delta.getDeltaRecovered()));
+        }
+        if (include) {
+            textLine = textLine.concat(String.format("in %s\n", delta.getState()));
+        }
+        updateText.accumulateAndGet(textLine, (current, update) -> current + update);
     }
 
     @NotNull
@@ -122,6 +266,7 @@ public class Covid19TelegramApp {
         // Records should be flushed every 10 seconds. This is less than the default
         // in order to keep this example interactive.
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 10 * 1000);
+        streamsConfiguration.put(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.OPTIMIZE);
         return streamsConfiguration;
     }
 

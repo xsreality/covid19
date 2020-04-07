@@ -1,14 +1,26 @@
 package org.covid19;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
+import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
+import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.QueryableStoreType;
+import org.apache.kafka.streams.state.QueryableStoreTypes;
+import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
+import org.apache.kafka.streams.state.Stores;
 import org.jetbrains.annotations.NotNull;
 import org.mapdb.DB;
 import org.mapdb.DBMaker;
@@ -18,16 +30,17 @@ import org.telegram.abilitybots.api.db.MapDBContext;
 import org.telegram.telegrambots.ApiContextInitializer;
 import org.telegram.telegrambots.meta.TelegramBotsApi;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
-import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import java.io.File;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Optional;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Properties;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
+import static java.util.Collections.singletonList;
 import static java.util.Objects.isNull;
 import static java.util.Objects.nonNull;
 
@@ -45,7 +58,7 @@ public class Covid19TelegramApp {
     private static String CHANNEL_CHAT_ID;
     private static String TELEGRAM_CREATOR_ID;
 
-    public static void main(final String[] args) {
+    public static void main(final String[] args) throws InterruptedException {
         initEnv();
 
         ApiContextInitializer.init();
@@ -56,59 +69,154 @@ public class Covid19TelegramApp {
 
         final Serde<String> stringSerde = Serdes.String();
         final Serde<PatientAndMessage> patientAndMessageSerde = new PatientAndMessageSerde();
+        final Serde<StatewiseStats> statewiseStatsSerde = new StatewiseStatsSerde();
 
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<String, PatientAndMessage> alerts = builder.stream(STREAM_ALERTS,
                 Consumed.with(stringSerde, patientAndMessageSerde));
 
+        final KTable<String, StatewiseStats> statewiseStatsTable = builder
+                .table("statewise-data",
+                        Materialized.<String, StatewiseStats, KeyValueStore<Bytes, byte[]>>as(
+                                Stores.persistentKeyValueStore("statewise-stats-persistent").name())
+                                .withKeySerde(stringSerde).withValueSerde(statewiseStatsSerde).withCachingDisabled());
+
+        // send telegram messages to all subscribers from alerts topic
         alerts
                 .peek((patientNumber, patientAndMessage) ->
                         LOG.info("Found new alert for patient #{}. Details: {}", patientNumber, patientAndMessage))
-
                 .mapValues((patientNumber, patientAndMessage) -> {
                     // this check is needed to handle old invalid alerts with different json structure
                     if (isNull(patientAndMessage.getPatientInfo())) {
                         return null;
                     }
-
-                    final Map<String, Map<String, String>> userPatientChatHistory = covid19Bot.userPatientChatHistory();
-
-                    final Map<String, Map<String, String>> updatedUserPatientHistory = new HashMap<>();
-
-                    userPatientChatHistory.forEach((userId, patientChatHistory) -> {
-                        boolean update = patientChatHistory.containsKey(patientNumber);
-
-                        String alertText = buildAlertText(update, patientAndMessage);
-
-                        Integer messageReplyId = update ? Integer.valueOf(patientChatHistory.get(patientNumber)) : null;
-
-                        LOG.info("Sending telegram alert to {} as {} message of patient #{}",
-                                userId, update ? "update" : "original", patientNumber);
-                        sendTelegramAlert(covid19Bot, userId, alertText, messageReplyId)
-                                .map(telegramResponse ->
-                                        patientChatHistory.put(patientNumber, String.valueOf(telegramResponse.getMessageId())));
-
-                        updatedUserPatientHistory.put(userId, patientChatHistory);
+                    final List<String> subscribedUsers = covid19Bot.subscribedUsers();
+                    String alertText = buildAlertText(false, patientAndMessage);
+                    subscribedUsers.forEach(userId -> {
+                        LOG.info("Sending telegram alert to {} of patient #{}", userId, patientNumber);
+                        sendTelegramAlert(covid19Bot, userId, alertText, null, false);
                     });
-
-                    covid19Bot.updateChatHistory(updatedUserPatientHistory);
-
                     // this is now redundant as we store the patientNumber->messageId mapping in Telegram Embedded DB
-                    return PatientAndMessage.builder()
-                            .message(null)
-                            .patientInfo(patientAndMessage.getPatientInfo())
-                            .build();
+                    return PatientAndMessage.builder().message(null).patientInfo(patientAndMessage.getPatientInfo()).build();
                 })
                 .filter((patientNumber, patientAndMessage) -> nonNull(patientAndMessage))
                 .to(STREAM_POSTED_MESSAGES, Produced.with(stringSerde, patientAndMessageSerde));
 
-        final KafkaStreams streams = new KafkaStreams(builder.build(), streamsConfiguration);
+        final KafkaStreams streams = new KafkaStreams(builder.build(streamsConfiguration), streamsConfiguration);
+
+        LOG.info("{}", builder.build().describe()); // print topology
 
         streams.start();
 
+        // open keyvalue store for reading total statewise stats
+        final ReadOnlyKeyValueStore<String, StatewiseStats> statewiseStore =
+                waitUntilStoreIsQueryable(statewiseStatsTable.queryableStoreName(), QueryableStoreTypes.keyValueStore(), streams);
+
         // Add shutdown hook to respond to SIGTERM and gracefully close Kafka Streams
         Runtime.getRuntime().addShutdownHook(new Thread(streams::close));
+
+        /* Setup the Consumer for statewise alerting */
+
+        Properties consumerProps = new Properties();
+        consumerProps.put("client.id", APPLICATION_ID + "-consumer-client");
+        consumerProps.put("group.id", APPLICATION_ID + "-consumer");
+        consumerProps.put("bootstrap.servers", BOOTSTRAP_SERVERS);
+        consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, stringSerde.deserializer().getClass().getName());
+        consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "io.confluent.kafka.serializers.KafkaJsonDeserializer");
+        consumerProps.put("json.value.type", StatewiseDelta.class);
+        consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+
+        final KafkaConsumer<String, StatewiseDelta> statewiseDeltaConsumer = new KafkaConsumer<>(consumerProps);
+        statewiseDeltaConsumer.subscribe(singletonList("org.covid19.patient-status-stats-statewise-delta-changelog"));
+
+        try {
+            List<StatewiseDelta> readyToSend = new ArrayList<>();
+            //noinspection InfiniteLoopStatement
+            while (true) {
+                ConsumerRecords<String, StatewiseDelta> records = statewiseDeltaConsumer.poll(Duration.ofMillis(100L));
+                for (ConsumerRecord<String, StatewiseDelta> record : records) {
+                    StatewiseDelta delta = record.value();
+                    // skip update with no changes
+                    if (delta.getDeltaRecovered() < 1L && delta.getDeltaConfirmed() < 1L && delta.getDeltaDeaths() < 1L) {
+                        continue;
+                    }
+                    readyToSend.add(delta);
+                }
+                if (readyToSend.isEmpty()) {
+                    continue;
+                }
+                fireStatewiseTelegramAlert(covid19Bot, statewiseStore, readyToSend);
+                readyToSend.clear();
+            }
+        } finally {
+            statewiseDeltaConsumer.close();
+        }
+    }
+
+    private static void fireStatewiseTelegramAlert(Covid19Bot covid19Bot,
+                                                   ReadOnlyKeyValueStore<String, StatewiseStats> statewiseStore,
+                                                   List<StatewiseDelta> deltas) {
+        String lastUpdated = deltas.get(deltas.size() - 1).getLastUpdatedTime();
+        AtomicReference<String> updateText = new AtomicReference<>("");
+        deltas.forEach(delta -> buildStatewiseAlertText(updateText, delta));
+
+        if (updateText.get().isEmpty() || "\n".equalsIgnoreCase(updateText.get())) {
+            LOG.info("No useful update to alert on. Skipping...");
+            return;
+        }
+
+        final StatewiseStats total = statewiseStore.get("Total");
+        String totalText = String.format("Total cases: %s\nRecovered: %s\nDeaths: %s",
+                total.getConfirmed(), total.getRecovered(), total.getDeaths());
+        String finalText = String.format("<i>%s</i>\n\n%s\n<pre>\n%s\n</pre>", lastUpdated, updateText.get(), totalText);
+
+        LOG.info("Statewise Alert text generated:\n{}", finalText);
+
+        final List<String> subscribedUsers = covid19Bot.subscribedUsers();
+        subscribedUsers.forEach(subscriber -> {
+            LOG.info("Sending statewise updates to {}", subscriber);
+            sendTelegramAlert(covid19Bot, subscriber, finalText, null, true);
+        });
+    }
+
+    private static void buildStatewiseAlertText(AtomicReference<String> updateText, StatewiseDelta delta) {
+        // skip total
+        if ("total".equalsIgnoreCase(delta.getState())) {
+            return;
+        }
+
+        boolean confirmed = false, deaths = false, recovered = false, include = false;
+        String textLine = "";
+        if (delta.getDeltaConfirmed() > 0L) {
+            include = true;
+            confirmed = true;
+            textLine = textLine.concat(String.format("%d new %s",
+                    delta.getDeltaConfirmed(),
+                    delta.getDeltaConfirmed() == 1L ? "case" : "cases"));
+        }
+        if (delta.getDeltaDeaths() > 0L) {
+            deaths = true;
+            include = true;
+            textLine = textLine.concat(String.format("%s%d %s ",
+                    confirmed ? ", " : "",
+                    delta.getDeltaDeaths(),
+                    delta.getDeltaDeaths() == 1L ? "death" : "deaths"));
+        }
+        if (delta.getDeltaRecovered() > 0L) {
+            recovered = true;
+            include = true;
+            textLine = textLine.concat(String.format("%s%d %s ",
+                    confirmed || deaths ? "and " : "",
+                    delta.getDeltaRecovered(),
+                    delta.getDeltaRecovered() == 1L ? "recovery" : "recoveries"));
+        }
+        if (include) {
+            textLine = textLine.concat(String.format("%sin %s\n",
+                    deaths || recovered ? "" : " ", // adds space before "in"
+                    delta.getState()));
+        }
+        updateText.accumulateAndGet(textLine, (current, update) -> current + update);
     }
 
     @NotNull
@@ -121,7 +229,9 @@ public class Covid19TelegramApp {
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         // Records should be flushed every 10 seconds. This is less than the default
         // in order to keep this example interactive.
+        streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 10 * 1000);
+        streamsConfiguration.put(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.OPTIMIZE);
         return streamsConfiguration;
     }
 
@@ -194,19 +304,20 @@ public class Covid19TelegramApp {
         TELEGRAM_CREATOR_ID = System.getenv("TELEGRAM_CREATOR_ID");
     }
 
-    private static Optional<Message> sendTelegramAlert(Covid19Bot bot, String chatId, String alertText, Integer replyId) {
+    private static void sendTelegramAlert(Covid19Bot bot, String chatId, String alertText, Integer replyId, boolean notification) {
         try {
             Thread.sleep(50);  // to avoid hitting Telegram rate limits
             SendMessage telegramMessage = new SendMessage()
                     .setChatId(chatId)
                     .setText(alertText)
-                    .disableNotification()
+                    .enableHtml(true)
                     .setReplyToMessageId(replyId);
 
-            return Optional.ofNullable(bot.execute(telegramMessage));
+            telegramMessage = notification ? telegramMessage.enableNotification() : telegramMessage.disableNotification();
+
+            bot.execute(telegramMessage);
         } catch (TelegramApiException | InterruptedException e) {
-            LOG.error("Unable to send Telegram alert!", e);
-            return Optional.empty();
+            LOG.error("Unable to send Telegram alert to user {}, with error {}", chatId, e.getMessage());
         }
     }
 
@@ -263,5 +374,18 @@ public class Covid19TelegramApp {
         LOG.info("Alert Text built for patient #{}:\n{}", patientInfo.getPatientNumber(), alertText);
 
         return alertText;
+    }
+
+    public static <T> T waitUntilStoreIsQueryable(final String storeName,
+                                                  final QueryableStoreType<T> queryableStoreType,
+                                                  final KafkaStreams streams) throws InterruptedException {
+        while (true) {
+            try {
+                return streams.store(storeName, queryableStoreType);
+            } catch (InvalidStateStoreException ignored) {
+                // store not yet ready for querying
+                Thread.sleep(100);
+            }
+        }
     }
 }

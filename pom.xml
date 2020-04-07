@@ -12,5 +12,6 @@
         <module>covid19-models</module>
         <module>covid19-patients-analyzer</module>
         <module>covid19-telegram-bot</module>
+        <module>covid19-stats</module>
     </modules>
 </project>

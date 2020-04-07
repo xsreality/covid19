@@ -71,7 +71,7 @@ public class Covid19Stats {
         // read the topic as KTable so that updates are read correctly
         final KTable<String, String> patientCurrentStatusTable = builder.table("patient-current-status", Materialized.with(stringSerde, stringSerde));
 
-        // count the occurences of current status
+        // count the occurrences of current status
         KTable<String, Long> currentStatusCount = patientCurrentStatusTable
                 .groupBy((patientNumber, patientStatus) -> KeyValue.pair(patientStatus, patientStatus), Grouped.with(stringSerde, stringSerde))
                 .count(Materialized.with(stringSerde, longSerde));

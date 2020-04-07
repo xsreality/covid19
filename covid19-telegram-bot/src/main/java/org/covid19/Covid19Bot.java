@@ -8,16 +8,13 @@ import org.telegram.abilitybots.api.objects.Ability;
 import org.telegram.abilitybots.api.objects.Locality;
 import org.telegram.abilitybots.api.objects.Privacy;
 
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.Objects;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class Covid19Bot extends AbilityBot {
     private static final Logger LOG = LoggerFactory.getLogger(Covid19Bot.class);
 
-    private static final String MAP_PATIENT_CHAT_HISTORY = "PATIENT_CHAT_HISTORY";
+    private static final String SUBSCRIBED_USERS = "SUBSCRIBED_USERS";
 
     private static Long CHAT_ID;
     private static Long CHANNEL_ID;
@@ -58,13 +55,16 @@ public class Covid19Bot extends AbilityBot {
                 .privacy(Privacy.PUBLIC)
                 .input(0)
                 .action(ctx -> {
-                    Map<String, Map<String, String>> userPatientChatHistory = db.getMap(MAP_PATIENT_CHAT_HISTORY);
+                    List<String> subscribedUsers = db.getList(SUBSCRIBED_USERS);
                     int userId = ctx.user().getId();
 
-                    boolean newUser = userPatientChatHistory.putIfAbsent(String.valueOf(userId), new HashMap<>()) == null;
+                    boolean newUser = !subscribedUsers.contains(String.valueOf(userId));
+                    if (newUser) {
+                        subscribedUsers.add(String.valueOf(userId));
+                    }
 
                     String message = newUser ?
-                            "Congratulations! You are now subscribed to Covid19 India Patient alerts!"
+                            "Congratulations! You are now subscribed to Covid19 India Patient alerts! Stay safe and keep social distancing!"
                             : "You are already subscribed to Covid19 India Patient alerts!";
                     silent.send(message, ctx.chatId());
                 })
@@ -86,15 +86,17 @@ public class Covid19Bot extends AbilityBot {
                 .privacy(Privacy.PUBLIC)
                 .input(0)
                 .action(ctx -> {
-                    Map<String, Map<String, String>> userPatientChatHistory = db.getMap("PATIENT_CHAT_HISTORY");
+                    List<String> subscribedUsers = db.getList(SUBSCRIBED_USERS);
                     int userId = ctx.user().getId();
 
+                    boolean existingUser = subscribedUsers.contains(String.valueOf(userId));
+                    if (existingUser) {
+                        subscribedUsers.remove(String.valueOf(userId));
+                    }
 
-                    boolean newUser = userPatientChatHistory.remove(String.valueOf(userId)) == null;
-
-                    String message = newUser ?
-                            "You are not yet subscribed to Covid19 India Patient alerts! Subscribe with /start"
-                            : "You have been unsubscribed from Covid19 India Patient alerts. Sorry to see you go.";
+                    String message = existingUser ?
+                            "You have been unsubscribed from Covid19 India Patient alerts. Avoid information overload. Stay safe and keep social distancing!"
+                            : "You are not yet subscribed to Covid19 India Patient alerts! Subscribe with /start";
                     silent.send(message, ctx.chatId());
                 })
                 .post(ctx -> {
@@ -123,48 +125,60 @@ public class Covid19Bot extends AbilityBot {
     }
 
     @SuppressWarnings("unused")
-    public Ability patientChatHistory() {
+    public Ability manuallyAdd() {
         return Ability
-                .builder()
-                .name("history")
-                .info("Subscribe to Covid19 India patient alerts")
-                .locality(Locality.USER)
-                .privacy(Privacy.CREATOR)
-                .input(1)
+                .builder().name("add").info("Manually subscribe a user to Covid19 India patient alerts")
+                .locality(Locality.USER).privacy(Privacy.CREATOR).input(1)
                 .action(ctx -> {
-                    Map<String, Map<String, String>> userPatientChatHistory = db.getMap(MAP_PATIENT_CHAT_HISTORY);
-                    int userId = ctx.user().getId();
-
-                    final Map<String, String> patientChatHistory = userPatientChatHistory.get(ctx.firstArg());
-
-                    if (Objects.isNull(patientChatHistory)) {
-                        String message = "Not a subscribed user: " + ctx.firstArg();
+                    List<String> subscribedUsers = db.getList(SUBSCRIBED_USERS);
+                    if (subscribedUsers.contains(ctx.firstArg())) {
+                        String message = "Already a subscribed user: " + ctx.firstArg();
                         silent.send(message, ctx.chatId());
                         return;
                     }
-
-                    final List<String> messages = new ArrayList<>();
-                    patientChatHistory.forEach((patientNumber, messageId) -> {
-                        messages.add(String.format("%s : %s", patientNumber, messageId));
-                    });
-
-                    String message = String.join("\n", messages);
-                    if (message.isEmpty()) {
-                        message = "No history found for " + ctx.firstArg();
-                    }
-
+                    subscribedUsers.add(ctx.firstArg());
+                    String message = "Manually subscribed user: " + ctx.firstArg();
                     silent.send(message, ctx.chatId());
                 })
                 .build();
     }
 
-
-    public Map<String, Map<String, String>> userPatientChatHistory() {
-        return db.getMap(MAP_PATIENT_CHAT_HISTORY);
+    @SuppressWarnings("unused")
+    public Ability manuallyRemove() {
+        return Ability
+                .builder().name("remove").info("Manually unsubscribe a user to Covid19 India patient alerts")
+                .locality(Locality.USER).privacy(Privacy.CREATOR).input(1)
+                .action(ctx -> {
+                    List<String> subscribedUsers = db.getList(SUBSCRIBED_USERS);
+                    if (!subscribedUsers.contains(ctx.firstArg())) {
+                        String message = "Not a subscribed user: " + ctx.firstArg();
+                        silent.send(message, ctx.chatId());
+                        return;
+                    }
+                    subscribedUsers.remove(ctx.firstArg());
+                    String message = "Manually un-subscribed user: " + ctx.firstArg();
+                    silent.send(message, ctx.chatId());
+                })
+                .build();
     }
 
-    public void updateChatHistory(Map<String, Map<String, String>> history) {
-        final Map<String, Map<String, String>> chatHistory = db.getMap(MAP_PATIENT_CHAT_HISTORY);
-        history.keySet().forEach(key -> chatHistory.put(key, history.get(key)));
-        }
+    @SuppressWarnings("unused")
+    public Ability listSubscribedUsers() {
+        return Ability
+                .builder().name("list").info("List all subscribed users of Covid19 India patient alerts")
+                .locality(Locality.USER).privacy(Privacy.CREATOR).input(0)
+                .action(ctx -> {
+                    List<String> subscribedUsers = db.getList(SUBSCRIBED_USERS);
+                    AtomicReference<String> listOfUsers = new AtomicReference<>("");
+                    subscribedUsers.forEach(user -> listOfUsers.accumulateAndGet(user, (s, s2) -> s + "\n" + s2));
+                    String message = "List of users:\n" + listOfUsers;
+                    silent.send(message, ctx.chatId());
+                })
+                .build();
+    }
+
+    public List<String> subscribedUsers() {
+        return db.getList(SUBSCRIBED_USERS);
+    }
+
 }

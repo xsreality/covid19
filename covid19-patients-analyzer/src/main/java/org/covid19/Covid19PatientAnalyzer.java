@@ -65,6 +65,11 @@ public class Covid19PatientAnalyzer {
                 .peek((patientNumber, patientInfo) ->
                         LOG.info("Sufficient info found for patient number {}", patientNumber))
                 .leftJoin(postedMessages, (latestPatientInfo, patientAndMessage) -> {
+                    if (isHospitalized(latestPatientInfo)) {
+                        // we skip hospitalized patients as they are too many now.
+                        LOG.info("Skipping as status is hospitalized for patient number {}", latestPatientInfo.getPatientNumber());
+                        return null;
+                    }
                     // this is a new patient, not alerted before
                     if (Objects.isNull(patientAndMessage)) {
                         LOG.info("Found new patient number (not alerted before {})", latestPatientInfo.getPatientNumber());
@@ -90,6 +95,10 @@ public class Covid19PatientAnalyzer {
 
         // Add shutdown hook to respond to SIGTERM and gracefully close Kafka Streams
         Runtime.getRuntime().addShutdownHook(new Thread(streams::close));
+    }
+
+    private static boolean isHospitalized(PatientInfo latestPatientInfo) {
+        return "Hospitalized".equalsIgnoreCase(latestPatientInfo.getCurrentStatus());
     }
 
     // determine if the latest patient info has significant changes worth sending alerts again.

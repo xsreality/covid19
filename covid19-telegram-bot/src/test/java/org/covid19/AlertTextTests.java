@@ -72,7 +72,7 @@ public class AlertTextTests {
 
     @Test
     void finalAlertText() {
-        final String expectedFinalAlert = "<i>08/04/2020 00:04:28</i>\n" +
+        final String expectedFinalAlert = "<i>April 08, 12:04 AM</i>\n" +
                 "\n" +
                 "1 new case in Assam\n" +
                 "9 new cases in Himachal Pradesh\n" +

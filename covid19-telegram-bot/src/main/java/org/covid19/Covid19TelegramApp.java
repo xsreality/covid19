@@ -34,6 +34,8 @@ import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import java.io.File;
 import java.time.Duration;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
@@ -160,6 +162,7 @@ public class Covid19TelegramApp {
 
     static String buildStatewiseAlertText(List<StatewiseStats> total, List<StatewiseDelta> deltas) {
         String lastUpdated = deltas.get(deltas.size() - 1).getLastUpdatedTime();
+        lastUpdated = friendlyTime(lastUpdated);
         AtomicReference<String> alertText = new AtomicReference<>("");
         deltas.forEach(delta -> buildDeltaAlertLine(alertText, delta));
         if (alertText.get().isEmpty() || "\n".equalsIgnoreCase(alertText.get())) {
@@ -170,6 +173,11 @@ public class Covid19TelegramApp {
         String finalText = String.format("<i>%s</i>\n\n%s", lastUpdated, alertText.get());
         LOG.info("Statewise Alert text generated:\n{}", finalText);
         return finalText;
+    }
+
+    private static String friendlyTime(String lastUpdated) {
+        final LocalDateTime localDateTime = LocalDateTime.parse(lastUpdated, DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss"));
+        return localDateTime.format(DateTimeFormatter.ofPattern("MMMM dd, hh:mm a"));
     }
 
     private static void fireStatewiseTelegramAlert(Covid19Bot covid19Bot, String alertText) {
@@ -223,7 +231,7 @@ public class Covid19TelegramApp {
                     delta.getDeltaRecovered() == 1L ? "recovery" : "recoveries"));
         }
         if (include) {
-            textLine = textLine.concat(String.format( " in %s\n",
+            textLine = textLine.concat(String.format(" in %s\n",
                     delta.getState()));
         }
         updateText.accumulateAndGet(textLine, (current, update) -> current + update);

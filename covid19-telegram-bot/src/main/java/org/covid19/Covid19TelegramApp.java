@@ -185,7 +185,7 @@ public class Covid19TelegramApp {
 
     static void buildSummaryAlertBlock(AtomicReference<String> updateText, List<StatewiseStats> stats) {
         stats.forEach(stat -> {
-            String statText = String.format("\n<i>%s</i>\n<pre>\nTotal cases: %s\nRecovered: %s\nDeaths: %s\n</pre>\n",
+            String statText = String.format("\n<b>%s</b>\n<pre>\nTotal cases: %s\nRecovered  : %s\nDeaths     : %s\n</pre>\n",
                     stat.getState(), stat.getConfirmed(), stat.getRecovered(), stat.getDeaths());
             updateText.accumulateAndGet(statText, (current, update) -> current + update);
         });

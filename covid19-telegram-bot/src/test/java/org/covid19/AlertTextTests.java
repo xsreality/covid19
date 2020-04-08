@@ -56,11 +56,11 @@ public class AlertTextTests {
 
     @Test
     void summaryAlertBlock() {
-        final String expectedSummaryBlock = "\n<i>Total</i>\n" +
+        final String expectedSummaryBlock = "\n<b>Total</b>\n" +
                 "<pre>\n" +
                 "Total cases: 5341\n" +
-                "Recovered: 455\n" +
-                "Deaths: 157\n" +
+                "Recovered  : 455\n" +
+                "Deaths     : 157\n" +
                 "</pre>\n";
         AtomicReference<String> actualSummaryBlock = new AtomicReference<>("");
 
@@ -77,25 +77,25 @@ public class AlertTextTests {
                 "1 new case in Assam\n" +
                 "9 new cases in Himachal Pradesh\n" +
                 "\n" +
-                "<i>Assam</i>\n" +
+                "<b>Assam</b>\n" +
                 "<pre>\n" +
                 "Total cases: 28\n" +
-                "Recovered: 0\n" +
-                "Deaths: 0\n" +
+                "Recovered  : 0\n" +
+                "Deaths     : 0\n" +
                 "</pre>\n" +
                 "\n" +
-                "<i>Himachal Pradesh</i>\n" +
+                "<b>Himachal Pradesh</b>\n" +
                 "<pre>\n" +
                 "Total cases: 27\n" +
-                "Recovered: 1\n" +
-                "Deaths: 2\n" +
+                "Recovered  : 1\n" +
+                "Deaths     : 2\n" +
                 "</pre>\n" +
                 "\n" +
-                "<i>Total</i>\n" +
+                "<b>Total</b>\n" +
                 "<pre>\n" +
                 "Total cases: 5341\n" +
-                "Recovered: 455\n" +
-                "Deaths: 157\n" +
+                "Recovered  : 455\n" +
+                "Deaths     : 157\n" +
                 "</pre>\n";
 
         List<StatewiseStats> stats = Arrays.asList(

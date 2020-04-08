@@ -34,6 +34,8 @@ import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import java.io.File;
 import java.time.Duration;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
@@ -146,7 +148,11 @@ public class Covid19TelegramApp {
                 if (readyToSend.isEmpty()) {
                     continue;
                 }
-                fireStatewiseTelegramAlert(covid19Bot, statewiseStore, readyToSend);
+                List<StatewiseStats> stats = new ArrayList<>();
+                readyToSend.forEach(statewiseDelta -> {
+                    stats.add(statewiseStore.get(statewiseDelta.getState()));
+                });
+                fireStatewiseTelegramAlert(covid19Bot, buildStatewiseAlertText(stats, readyToSend));
                 readyToSend.clear();
             }
         } finally {
@@ -154,33 +160,46 @@ public class Covid19TelegramApp {
         }
     }
 
-    private static void fireStatewiseTelegramAlert(Covid19Bot covid19Bot,
-                                                   ReadOnlyKeyValueStore<String, StatewiseStats> statewiseStore,
-                                                   List<StatewiseDelta> deltas) {
+    static String buildStatewiseAlertText(List<StatewiseStats> total, List<StatewiseDelta> deltas) {
         String lastUpdated = deltas.get(deltas.size() - 1).getLastUpdatedTime();
-        AtomicReference<String> updateText = new AtomicReference<>("");
-        deltas.forEach(delta -> buildStatewiseAlertText(updateText, delta));
-
-        if (updateText.get().isEmpty() || "\n".equalsIgnoreCase(updateText.get())) {
+        lastUpdated = friendlyTime(lastUpdated);
+        AtomicReference<String> alertText = new AtomicReference<>("");
+        deltas.forEach(delta -> buildDeltaAlertLine(alertText, delta));
+        if (alertText.get().isEmpty() || "\n".equalsIgnoreCase(alertText.get())) {
             LOG.info("No useful update to alert on. Skipping...");
-            return;
+            return "";
         }
-
-        final StatewiseStats total = statewiseStore.get("Total");
-        String totalText = String.format("Total cases: %s\nRecovered: %s\nDeaths: %s",
-                total.getConfirmed(), total.getRecovered(), total.getDeaths());
-        String finalText = String.format("<i>%s</i>\n\n%s\n<pre>\n%s\n</pre>", lastUpdated, updateText.get(), totalText);
-
+        buildSummaryAlertBlock(alertText, total);
+        String finalText = String.format("<i>%s</i>\n\n%s", lastUpdated, alertText.get());
         LOG.info("Statewise Alert text generated:\n{}", finalText);
+        return finalText;
+    }
 
+    private static String friendlyTime(String lastUpdated) {
+        final LocalDateTime localDateTime = LocalDateTime.parse(lastUpdated, DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss"));
+        return localDateTime.format(DateTimeFormatter.ofPattern("MMMM dd, hh:mm a"));
+    }
+
+    private static void fireStatewiseTelegramAlert(Covid19Bot covid19Bot, String alertText) {
+        if (isNull(alertText) || alertText.isEmpty()) {
+            return; // skip sending alert
+        }
         final List<String> subscribedUsers = covid19Bot.subscribedUsers();
         subscribedUsers.forEach(subscriber -> {
             LOG.info("Sending statewise updates to {}", subscriber);
-            sendTelegramAlert(covid19Bot, subscriber, finalText, null, true);
+            sendTelegramAlert(covid19Bot, subscriber, alertText, null, true);
         });
     }
 
-    private static void buildStatewiseAlertText(AtomicReference<String> updateText, StatewiseDelta delta) {
+    static void buildSummaryAlertBlock(AtomicReference<String> updateText, List<StatewiseStats> stats) {
+        stats.forEach(stat -> {
+            String statText = String.format("\n<b>%s</b>\n<pre>\nTotal cases: %s\nRecovered  : %s\nDeaths     : %s\n</pre>\n",
+                    stat.getState(), stat.getConfirmed(), stat.getRecovered(), stat.getDeaths());
+            updateText.accumulateAndGet(statText, (current, update) -> current + update);
+        });
+    }
+
+    static void buildDeltaAlertLine(AtomicReference<String> updateText, StatewiseDelta delta) {
         // skip total
         if ("total".equalsIgnoreCase(delta.getState())) {
             return;
@@ -198,7 +217,7 @@ public class Covid19TelegramApp {
         if (delta.getDeltaDeaths() > 0L) {
             deaths = true;
             include = true;
-            textLine = textLine.concat(String.format("%s%d %s ",
+            textLine = textLine.concat(String.format("%s%d %s",
                     confirmed ? ", " : "",
                     delta.getDeltaDeaths(),
                     delta.getDeltaDeaths() == 1L ? "death" : "deaths"));
@@ -206,14 +225,13 @@ public class Covid19TelegramApp {
         if (delta.getDeltaRecovered() > 0L) {
             recovered = true;
             include = true;
-            textLine = textLine.concat(String.format("%s%d %s ",
-                    confirmed || deaths ? "and " : "",
+            textLine = textLine.concat(String.format("%s%d %s",
+                    confirmed || deaths ? ", " : "",
                     delta.getDeltaRecovered(),
                     delta.getDeltaRecovered() == 1L ? "recovery" : "recoveries"));
         }
         if (include) {
-            textLine = textLine.concat(String.format("%sin %s\n",
-                    deaths || recovered ? "" : " ", // adds space before "in"
+            textLine = textLine.concat(String.format(" in %s\n",
                     delta.getState()));
         }
         updateText.accumulateAndGet(textLine, (current, update) -> current + update);

@@ -1,5 +1,6 @@
 package org.covid19;
 
+import org.apache.commons.lang3.tuple.Pair;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -45,6 +46,7 @@ import static com.google.common.base.Strings.isNullOrEmpty;
 import static java.util.Collections.singletonList;
 import static java.util.Objects.isNull;
 import static java.util.Objects.nonNull;
+import static org.covid19.Utils.zip;
 
 public class Covid19TelegramApp {
     private static final Logger LOG = LoggerFactory.getLogger(Covid19TelegramApp.class);
@@ -72,17 +74,24 @@ public class Covid19TelegramApp {
         final Serde<String> stringSerde = Serdes.String();
         final Serde<PatientAndMessage> patientAndMessageSerde = new PatientAndMessageSerde();
         final Serde<StatewiseStats> statewiseStatsSerde = new StatewiseStatsSerde();
+        final Serde<StatewiseDelta> statewiseDeltaSerde = new StatewiseDeltaSerde();
 
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<String, PatientAndMessage> alerts = builder.stream(STREAM_ALERTS,
                 Consumed.with(stringSerde, patientAndMessageSerde));
 
-        final KTable<String, StatewiseStats> statewiseStatsTable = builder
-                .table("statewise-data",
-                        Materialized.<String, StatewiseStats, KeyValueStore<Bytes, byte[]>>as(
-                                Stores.persistentKeyValueStore("statewise-stats-persistent").name())
-                                .withKeySerde(stringSerde).withValueSerde(statewiseStatsSerde).withCachingDisabled());
+        final KTable<String, StatewiseStats> statewiseStatsTable = builder.table("statewise-data",
+                Materialized.<String, StatewiseStats, KeyValueStore<Bytes, byte[]>>as(
+                        Stores.persistentKeyValueStore("statewise-stats-persistent").name())
+                        .withKeySerde(stringSerde).withValueSerde(statewiseStatsSerde).withCachingDisabled());
+
+        // used to open local keyvalue store for daily increment stats
+        final KTable<String, StatewiseDelta> dailyStatewiseTable = builder.table("statewise-daily-stats",
+                Materialized.<String, StatewiseDelta, KeyValueStore<Bytes, byte[]>>as(
+                        Stores.inMemoryKeyValueStore("statewise-daily-persistent").name())
+                        .withKeySerde(stringSerde).withValueSerde(statewiseDeltaSerde).withCachingDisabled());
+
 
         // send telegram messages to all subscribers from alerts topic
         alerts
@@ -115,10 +124,14 @@ public class Covid19TelegramApp {
         final ReadOnlyKeyValueStore<String, StatewiseStats> statewiseStore =
                 waitUntilStoreIsQueryable(statewiseStatsTable.queryableStoreName(), QueryableStoreTypes.keyValueStore(), streams);
 
+        // open keyvalue store for reading total daily incremental statewise delta
+        final ReadOnlyKeyValueStore<String, StatewiseDelta> dailyStatewiseStore =
+                waitUntilStoreIsQueryable(dailyStatewiseTable.queryableStoreName(), QueryableStoreTypes.keyValueStore(), streams);
+
         // Add shutdown hook to respond to SIGTERM and gracefully close Kafka Streams
         Runtime.getRuntime().addShutdownHook(new Thread(streams::close));
 
-        /* Setup the Consumer for statewise alerting */
+        /* Setup the Consumer for sending statewise updates */
 
         Properties consumerProps = new Properties();
         consumerProps.put("client.id", APPLICATION_ID + "-consumer-client");
@@ -130,7 +143,7 @@ public class Covid19TelegramApp {
         consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
         final KafkaConsumer<String, StatewiseDelta> statewiseDeltaConsumer = new KafkaConsumer<>(consumerProps);
-        statewiseDeltaConsumer.subscribe(singletonList("org.covid19.patient-status-stats-statewise-delta-changelog"));
+        statewiseDeltaConsumer.subscribe(singletonList("statewise-delta-stats"));
 
         try {
             List<StatewiseDelta> readyToSend = new ArrayList<>();
@@ -148,11 +161,14 @@ public class Covid19TelegramApp {
                 if (readyToSend.isEmpty()) {
                     continue;
                 }
+
                 List<StatewiseStats> stats = new ArrayList<>();
+                List<StatewiseDelta> dailyIncrements = new ArrayList<>();
                 readyToSend.forEach(statewiseDelta -> {
                     stats.add(statewiseStore.get(statewiseDelta.getState()));
+                    dailyIncrements.add(dailyStatewiseStore.get(statewiseDelta.getState()));
                 });
-                fireStatewiseTelegramAlert(covid19Bot, buildStatewiseAlertText(stats, readyToSend));
+                fireStatewiseTelegramAlert(covid19Bot, buildStatewiseAlertText(zip(stats, dailyIncrements), readyToSend));
                 readyToSend.clear();
             }
         } finally {
@@ -160,7 +176,7 @@ public class Covid19TelegramApp {
         }
     }
 
-    static String buildStatewiseAlertText(List<StatewiseStats> total, List<StatewiseDelta> deltas) {
+    static String buildStatewiseAlertText(List<Pair<StatewiseStats, StatewiseDelta>> stats, List<StatewiseDelta> deltas) {
         String lastUpdated = deltas.get(deltas.size() - 1).getLastUpdatedTime();
         lastUpdated = friendlyTime(lastUpdated);
         AtomicReference<String> alertText = new AtomicReference<>("");
@@ -169,7 +185,7 @@ public class Covid19TelegramApp {
             LOG.info("No useful update to alert on. Skipping...");
             return "";
         }
-        buildSummaryAlertBlock(alertText, total);
+        buildSummaryAlertBlock(alertText, stats);
         String finalText = String.format("<i>%s</i>\n\n%s", lastUpdated, alertText.get());
         LOG.info("Statewise Alert text generated:\n{}", finalText);
         return finalText;
@@ -191,10 +207,20 @@ public class Covid19TelegramApp {
         });
     }
 
-    static void buildSummaryAlertBlock(AtomicReference<String> updateText, List<StatewiseStats> stats) {
-        stats.forEach(stat -> {
-            String statText = String.format("\n<b>%s</b>\n<pre>\nTotal cases: %s\nRecovered  : %s\nDeaths     : %s\n</pre>\n",
-                    stat.getState(), stat.getConfirmed(), stat.getRecovered(), stat.getDeaths());
+    static void buildSummaryAlertBlock(AtomicReference<String> updateText, List<Pair<StatewiseStats, StatewiseDelta>> stats) {
+        stats.forEach(pair -> {
+            StatewiseStats stat = pair.getKey();
+            StatewiseDelta increment = pair.getValue();
+            String statText = String.format("\n<b>%s</b>\n" +
+                            "<pre>\n" +
+                            "Total cases: (↑%s) %s\n" +
+                            "Recovered  : (↑%s) %s\n" +
+                            "Deaths     : (↑%s) %s\n" +
+                            "</pre>\n",
+                    stat.getState(),
+                    nonNull(increment) ? increment.getDeltaConfirmed() : "", stat.getConfirmed(),
+                    nonNull(increment) ? increment.getDeltaRecovered() : "", stat.getRecovered(),
+                    nonNull(increment) ? increment.getDeltaDeaths() : "", stat.getDeaths());
             updateText.accumulateAndGet(statText, (current, update) -> current + update);
         });
     }

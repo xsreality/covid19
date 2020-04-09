@@ -1,5 +1,6 @@
 package org.covid19;
 
+import org.apache.commons.lang3.tuple.Pair;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -7,6 +8,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static org.covid19.Utils.zip;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class AlertTextTests {
@@ -58,14 +60,15 @@ public class AlertTextTests {
     void summaryAlertBlock() {
         final String expectedSummaryBlock = "\n<b>Total</b>\n" +
                 "<pre>\n" +
-                "Total cases: 5341\n" +
-                "Recovered  : 455\n" +
-                "Deaths     : 157\n" +
+                "Total cases: (↑15) 5341\n" +
+                "Recovered  : (↑9) 455\n" +
+                "Deaths     : (↑4) 157\n" +
                 "</pre>\n";
         AtomicReference<String> actualSummaryBlock = new AtomicReference<>("");
 
         List<StatewiseStats> stats = Collections.singletonList(new StatewiseStats("0", "5341", "157", "455", "Total", "TT", ""));
-        Covid19TelegramApp.buildSummaryAlertBlock(actualSummaryBlock, stats);
+        List<StatewiseDelta> increments = Collections.singletonList(new StatewiseDelta(9L, 4L, 15L, 0L, 0L, 0L, "", "Total"));
+        Covid19TelegramApp.buildSummaryAlertBlock(actualSummaryBlock, zip(stats, increments));
 
         assertEquals(expectedSummaryBlock, actualSummaryBlock.get(), "Summary block is not structured correctly!");
     }
@@ -79,34 +82,38 @@ public class AlertTextTests {
                 "\n" +
                 "<b>Assam</b>\n" +
                 "<pre>\n" +
-                "Total cases: 28\n" +
-                "Recovered  : 0\n" +
-                "Deaths     : 0\n" +
+                "Total cases: (↑1) 28\n" +
+                "Recovered  : (↑0) 0\n" +
+                "Deaths     : (↑0) 0\n" +
                 "</pre>\n" +
                 "\n" +
                 "<b>Himachal Pradesh</b>\n" +
                 "<pre>\n" +
-                "Total cases: 27\n" +
-                "Recovered  : 1\n" +
-                "Deaths     : 2\n" +
+                "Total cases: (↑9) 27\n" +
+                "Recovered  : (↑0) 1\n" +
+                "Deaths     : (↑0) 2\n" +
                 "</pre>\n" +
                 "\n" +
                 "<b>Total</b>\n" +
                 "<pre>\n" +
-                "Total cases: 5341\n" +
-                "Recovered  : 455\n" +
-                "Deaths     : 157\n" +
+                "Total cases: (↑31) 5341\n" +
+                "Recovered  : (↑8) 455\n" +
+                "Deaths     : (↑3) 157\n" +
                 "</pre>\n";
 
         List<StatewiseStats> stats = Arrays.asList(
                 new StatewiseStats("0", "28", "0", "0", "Assam", "AS", ""),
                 new StatewiseStats("0", "27", "2", "1", "Himachal Pradesh", "HP", ""),
                 new StatewiseStats("0", "5341", "157", "455", "Total", "TT", ""));
+        List<StatewiseDelta> increments = Arrays.asList(
+                new StatewiseDelta(0L, 0L, 1L, 0L, 0L, 0L, "08/04/2020 23:41:35", "Assam"),
+                new StatewiseDelta(0L, 0L, 9L, 0L, 0L, 0L, "08/04/2020 00:04:28", "Himachal Pradesh"),
+                new StatewiseDelta(8L, 3L, 31L, 0L, 0L, 0L, "08/04/2020 00:04:28", "Total"));
         List<StatewiseDelta> deltas = Arrays.asList(
                 new StatewiseDelta(0L, 0L, 1L, 0L, 0L, 0L, "08/04/2020 23:41:35", "Assam"),
                 new StatewiseDelta(0L, 0L, 9L, 0L, 0L, 0L, "08/04/2020 00:04:28", "Himachal Pradesh"));
 
-        final String actualFinalAlert = Covid19TelegramApp.buildStatewiseAlertText(stats, deltas);
+        final String actualFinalAlert = Covid19TelegramApp.buildStatewiseAlertText(zip(stats, increments), deltas);
 
         assertEquals(expectedFinalAlert, actualFinalAlert, "Summary block is not structured correctly!");
     }

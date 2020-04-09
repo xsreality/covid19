@@ -14,10 +14,14 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
+import org.apache.kafka.streams.kstream.TimeWindows;
+import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.WindowStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Duration;
 import java.util.Properties;
 
 import static java.lang.Long.parseLong;
@@ -107,8 +111,48 @@ public class Covid19Stats {
                         }, (state, oldStatewiseStats, aggregate) -> aggregate,
                         Materialized.<String, StatewiseDelta, KeyValueStore<Bytes, byte[]>>as("statewise-delta")
                                 .withKeySerde(stringSerde)
-                                .withValueSerde(statewiseDeltaSerde));
+                                .withValueSerde(statewiseDeltaSerde))
+                .toStream()
+                .peek((key, value) -> {
+                    try {
+                        // strategic delay to allow the other topology to process
+                        // records before this topology completes. This allows
+                        // the statewise daily incremental stats to be calculated before
+                        // the statewise delta stats are calculated. The consumer listening
+                        // on the statewise-delta-stats will be triggered after daily stats have
+                        // been updated in the KTable.
+                        Thread.sleep(1000);
+                    } catch (InterruptedException e) {
+                        // ignore
+                    }
+                })
+                .to("statewise-delta-stats", Produced.with(stringSerde, statewiseDeltaSerde));
 
+
+        // topology to build daily incremental stats
+        builder.stream("org.covid19.patient-status-stats-statewise-delta-changelog",
+                Consumed.with(stringSerde, statewiseDeltaSerde))
+                .groupByKey(Grouped.with(stringSerde, statewiseDeltaSerde))
+                .windowedBy(TimeWindows.of(Duration.ofDays(1L)))
+                .aggregate(StatewiseDelta::new, (state, newDelta, aggregate) -> {
+                    aggregate.setDeltaConfirmed(aggregate.getDeltaConfirmed() + newDelta.getDeltaConfirmed());
+                    aggregate.setDeltaRecovered(aggregate.getDeltaRecovered() + newDelta.getDeltaRecovered());
+                    aggregate.setDeltaDeaths(aggregate.getDeltaDeaths() + newDelta.getDeltaDeaths());
+
+                    aggregate.setCurrentConfirmed(newDelta.getCurrentConfirmed());
+                    aggregate.setCurrentRecovered(newDelta.getCurrentRecovered());
+                    aggregate.setCurrentDeaths(newDelta.getCurrentDeaths());
+
+                    aggregate.setState(newDelta.getState());
+                    aggregate.setLastUpdatedTime(newDelta.getLastUpdatedTime());
+                    return aggregate;
+                }, Materialized.<String, StatewiseDelta, WindowStore<Bytes, byte[]>>as("statewise-windowed-daily")
+                        .withKeySerde(stringSerde)
+                        .withValueSerde(statewiseDeltaSerde)
+                        .withCachingDisabled())
+                .toStream()
+                .map((Windowed<String> key, StatewiseDelta delta) -> new KeyValue<>(key.key(), delta))
+                .to("statewise-daily-stats", Produced.with(stringSerde, statewiseDeltaSerde));
 
         final KafkaStreams streams = new KafkaStreams(builder.build(), streamsConfiguration);
 

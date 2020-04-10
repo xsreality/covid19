@@ -19,3 +19,7 @@ updating the patient information using official and unofficial (social media etc
 tries to capture these updates and sends alerts that links to previous alert sent for the same patient (if any).
 This helps you see the progress a patient makes (like recovered or deceased). Alerts are only sent
 if the update is significant. Currently this means either changes in status or notes.
+
+## Architecture
+
+![Kafka Streams Architecture](https://i.ibb.co/d4Ld2TW/Covid19-India-Alerts-1.png "Covid19 Kafka Streams Architecture")

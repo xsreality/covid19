@@ -11,6 +11,7 @@ To subscribe, just send the command `/start`. To unsubscribe, send the command `
 Below is an example of an alert sent by the bot:
 
 ![Sample Telegram Bot Alert screenshot](https://i.ibb.co/V3hQLwV/Screenshot-20200402-000351.jpg "Sample Telegram alert")
+![Sample Telegram Bot Statewise Alert screenshot](https://i.ibb.co/RyGHc1t/Screenshot-20200410-115109.jpg "Statewise alert")
 
 ## Alert Updates
 

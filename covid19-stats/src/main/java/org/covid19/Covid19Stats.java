@@ -113,19 +113,6 @@ public class Covid19Stats {
                                 .withKeySerde(stringSerde)
                                 .withValueSerde(statewiseDeltaSerde))
                 .toStream()
-                .peek((key, value) -> {
-                    try {
-                        // strategic delay to allow the other topology to process
-                        // records before this topology completes. This allows
-                        // the statewise daily incremental stats to be calculated before
-                        // the statewise delta stats are calculated. The consumer listening
-                        // on the statewise-delta-stats will be triggered after daily stats have
-                        // been updated in the KTable.
-                        Thread.sleep(1000);
-                    } catch (InterruptedException e) {
-                        // ignore
-                    }
-                })
                 .to("statewise-delta-stats", Produced.with(stringSerde, statewiseDeltaSerde));
 
 

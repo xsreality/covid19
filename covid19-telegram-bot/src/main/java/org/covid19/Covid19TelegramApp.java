@@ -164,6 +164,17 @@ public class Covid19TelegramApp {
 
                 List<StatewiseStats> stats = new ArrayList<>();
                 List<StatewiseDelta> dailyIncrements = new ArrayList<>();
+                try {
+                    // strategic delay to allow the other topology to process
+                    // records before this topology completes. This allows
+                    // the statewise daily incremental stats to be calculated before
+                    // the statewise delta stats are calculated. The consumer listening
+                    // on the statewise-delta-stats will be triggered after daily stats have
+                    // been updated in the KTable.
+                    Thread.sleep(5000);
+                } catch (InterruptedException e) {
+                    // ignore
+                }
                 readyToSend.forEach(statewiseDelta -> {
                     stats.add(statewiseStore.get(statewiseDelta.getState()));
                     dailyIncrements.add(dailyStatewiseStore.get(statewiseDelta.getState()));

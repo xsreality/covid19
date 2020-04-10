@@ -60,32 +60,6 @@ public class Covid19Stats {
 
         final StreamsBuilder builder = new StreamsBuilder();
 
-        // build KStream from patient alerts topic
-        final KStream<String, PatientAndMessage> patientAlerts = builder.stream(KAFKA_TOPIC_PATIENT_ALERTS, Consumed.with(stringSerde, patientAndMessageSerde));
-
-        // build KStream of patient and current status and store in new topic
-        final KStream<String, String> patientCurrentStatus = patientAlerts
-                // need these filters to clear out old invalid data
-                .filter((patientNumber, patientAndMessage) ->
-                        nonNull(patientAndMessage.getPatientInfo()) && nonNull(patientNumber) && !patientNumber.isEmpty() && !patientAndMessage.getPatientInfo().getCurrentStatus().isEmpty())
-                .mapValues((patientNumber, patientAndMessage) -> patientAndMessage.getPatientInfo().getCurrentStatus());
-
-        patientCurrentStatus.to("patient-current-status", Produced.with(stringSerde, stringSerde));
-
-        // read the topic as KTable so that updates are read correctly
-        final KTable<String, String> patientCurrentStatusTable = builder.table("patient-current-status", Materialized.with(stringSerde, stringSerde));
-
-        // count the occurrences of current status
-        KTable<String, Long> currentStatusCount = patientCurrentStatusTable
-                .groupBy((patientNumber, patientStatus) -> KeyValue.pair(patientStatus, patientStatus), Grouped.with(stringSerde, stringSerde))
-                .count(Materialized.with(stringSerde, longSerde));
-
-        // output results to a topic
-        currentStatusCount.toStream()
-                .peek((key, value) -> LOG.info("Status: {}, Count: {}", key, value))
-                .to(KAFKA_TOPIC_PATIENT_STATUS_COUNT, Produced.with(stringSerde, longSerde));
-
-
         // build the statewise delta stats of recovery, death and confirmed Covid19 cases
         // This KTable is read by covid19-telegram-bot to send statewise delta updates
         builder.table("statewise-data",

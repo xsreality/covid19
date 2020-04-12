@@ -34,8 +34,6 @@ import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import java.io.File;
 import java.time.Duration;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
@@ -45,6 +43,8 @@ import static com.google.common.base.Strings.isNullOrEmpty;
 import static java.util.Collections.singletonList;
 import static java.util.Objects.isNull;
 import static java.util.Objects.nonNull;
+import static org.covid19.Utils.friendlyTime;
+import static org.covid19.Utils.zip;
 
 public class Covid19TelegramApp {
     private static final Logger LOG = LoggerFactory.getLogger(Covid19TelegramApp.class);
@@ -71,18 +71,19 @@ public class Covid19TelegramApp {
 
         final Serde<String> stringSerde = Serdes.String();
         final Serde<PatientAndMessage> patientAndMessageSerde = new PatientAndMessageSerde();
-        final Serde<StatewiseStats> statewiseStatsSerde = new StatewiseStatsSerde();
+        final Serde<StatewiseDelta> statewiseDeltaSerde = new StatewiseDeltaSerde();
 
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<String, PatientAndMessage> alerts = builder.stream(STREAM_ALERTS,
                 Consumed.with(stringSerde, patientAndMessageSerde));
 
-        final KTable<String, StatewiseStats> statewiseStatsTable = builder
-                .table("statewise-data",
-                        Materialized.<String, StatewiseStats, KeyValueStore<Bytes, byte[]>>as(
-                                Stores.persistentKeyValueStore("statewise-stats-persistent").name())
-                                .withKeySerde(stringSerde).withValueSerde(statewiseStatsSerde).withCachingDisabled());
+        // used to open local keyvalue store for daily increment stats
+        final KTable<String, StatewiseDelta> dailyStatewiseTable = builder.table("statewise-daily-stats",
+                Materialized.<String, StatewiseDelta, KeyValueStore<Bytes, byte[]>>as(
+                        Stores.inMemoryKeyValueStore("statewise-daily-persistent").name())
+                        .withKeySerde(stringSerde).withValueSerde(statewiseDeltaSerde).withCachingDisabled());
+
 
         // send telegram messages to all subscribers from alerts topic
         alerts
@@ -111,14 +112,14 @@ public class Covid19TelegramApp {
 
         streams.start();
 
-        // open keyvalue store for reading total statewise stats
-        final ReadOnlyKeyValueStore<String, StatewiseStats> statewiseStore =
-                waitUntilStoreIsQueryable(statewiseStatsTable.queryableStoreName(), QueryableStoreTypes.keyValueStore(), streams);
+        // open keyvalue store for reading total daily incremental statewise delta
+        final ReadOnlyKeyValueStore<String, StatewiseDelta> dailyStatewiseStore =
+                waitUntilStoreIsQueryable(dailyStatewiseTable.queryableStoreName(), QueryableStoreTypes.keyValueStore(), streams);
 
         // Add shutdown hook to respond to SIGTERM and gracefully close Kafka Streams
         Runtime.getRuntime().addShutdownHook(new Thread(streams::close));
 
-        /* Setup the Consumer for statewise alerting */
+        /* Setup the Consumer for sending statewise updates */
 
         Properties consumerProps = new Properties();
         consumerProps.put("client.id", APPLICATION_ID + "-consumer-client");
@@ -130,7 +131,7 @@ public class Covid19TelegramApp {
         consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
         final KafkaConsumer<String, StatewiseDelta> statewiseDeltaConsumer = new KafkaConsumer<>(consumerProps);
-        statewiseDeltaConsumer.subscribe(singletonList("org.covid19.patient-status-stats-statewise-delta-changelog"));
+        statewiseDeltaConsumer.subscribe(singletonList("statewise-delta-stats"));
 
         try {
             List<StatewiseDelta> readyToSend = new ArrayList<>();
@@ -148,11 +149,27 @@ public class Covid19TelegramApp {
                 if (readyToSend.isEmpty()) {
                     continue;
                 }
-                List<StatewiseStats> stats = new ArrayList<>();
+
+                List<StatewiseDelta> dailyIncrements = new ArrayList<>();
+                try {
+                    // strategic delay to allow the other topology to process
+                    // records before this topology completes. This allows
+                    // the statewise daily incremental stats to be calculated before
+                    // the statewise delta stats are calculated. The consumer listening
+                    // on the statewise-delta-stats will be triggered after daily stats have
+                    // been updated in the KTable.
+                    Thread.sleep(5000);
+                } catch (InterruptedException e) {
+                    // ignore
+                }
+                AtomicReference<String> lastUpdated = new AtomicReference<>("");
                 readyToSend.forEach(statewiseDelta -> {
-                    stats.add(statewiseStore.get(statewiseDelta.getState()));
+                    if ("Total".equalsIgnoreCase(statewiseDelta.getState())) {
+                        lastUpdated.set(statewiseDelta.getLastUpdatedTime());
+                    }
+                    dailyIncrements.add(dailyStatewiseStore.get(statewiseDelta.getState()));
                 });
-                fireStatewiseTelegramAlert(covid19Bot, buildStatewiseAlertText(stats, readyToSend));
+                fireStatewiseTelegramAlert(covid19Bot, buildStatewiseAlertText(friendlyTime(lastUpdated.get()), readyToSend, dailyIncrements));
                 readyToSend.clear();
             }
         } finally {
@@ -160,24 +177,17 @@ public class Covid19TelegramApp {
         }
     }
 
-    static String buildStatewiseAlertText(List<StatewiseStats> total, List<StatewiseDelta> deltas) {
-        String lastUpdated = deltas.get(deltas.size() - 1).getLastUpdatedTime();
-        lastUpdated = friendlyTime(lastUpdated);
+    static String buildStatewiseAlertText(String lastUpdated, List<StatewiseDelta> deltas, List<StatewiseDelta> dailies) {
         AtomicReference<String> alertText = new AtomicReference<>("");
         deltas.forEach(delta -> buildDeltaAlertLine(alertText, delta));
         if (alertText.get().isEmpty() || "\n".equalsIgnoreCase(alertText.get())) {
             LOG.info("No useful update to alert on. Skipping...");
             return "";
         }
-        buildSummaryAlertBlock(alertText, total);
+        buildSummaryAlertBlock(alertText, deltas, dailies);
         String finalText = String.format("<i>%s</i>\n\n%s", lastUpdated, alertText.get());
         LOG.info("Statewise Alert text generated:\n{}", finalText);
         return finalText;
-    }
-
-    private static String friendlyTime(String lastUpdated) {
-        final LocalDateTime localDateTime = LocalDateTime.parse(lastUpdated, DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss"));
-        return localDateTime.format(DateTimeFormatter.ofPattern("MMMM dd, hh:mm a"));
     }
 
     private static void fireStatewiseTelegramAlert(Covid19Bot covid19Bot, String alertText) {
@@ -191,10 +201,20 @@ public class Covid19TelegramApp {
         });
     }
 
-    static void buildSummaryAlertBlock(AtomicReference<String> updateText, List<StatewiseStats> stats) {
-        stats.forEach(stat -> {
-            String statText = String.format("\n<b>%s</b>\n<pre>\nTotal cases: %s\nRecovered  : %s\nDeaths     : %s\n</pre>\n",
-                    stat.getState(), stat.getConfirmed(), stat.getRecovered(), stat.getDeaths());
+    static void buildSummaryAlertBlock(AtomicReference<String> updateText, List<StatewiseDelta> deltas, List<StatewiseDelta> dailies) {
+        zip(deltas, dailies).forEach(pair -> {
+            StatewiseDelta delta = pair.getKey();
+            StatewiseDelta daily = pair.getValue();
+            String statText = String.format("\n<b>%s</b>\n" +
+                            "<pre>\n" +
+                            "Total cases: (↑%s) %s\n" +
+                            "Recovered  : (↑%s) %s\n" +
+                            "Deaths     : (↑%s) %s\n" +
+                            "</pre>\n",
+                    delta.getState(),
+                    nonNull(daily) ? daily.getDeltaConfirmed() : "", delta.getCurrentConfirmed(),
+                    nonNull(daily) ? daily.getDeltaRecovered() : "", delta.getCurrentRecovered(),
+                    nonNull(daily) ? daily.getDeltaDeaths() : "", delta.getCurrentDeaths());
             updateText.accumulateAndGet(statText, (current, update) -> current + update);
         });
     }
@@ -205,7 +225,7 @@ public class Covid19TelegramApp {
             return;
         }
 
-        boolean confirmed = false, deaths = false, recovered = false, include = false;
+        boolean confirmed = false, deaths = false, include = false;
         String textLine = "";
         if (delta.getDeltaConfirmed() > 0L) {
             include = true;
@@ -223,7 +243,6 @@ public class Covid19TelegramApp {
                     delta.getDeltaDeaths() == 1L ? "death" : "deaths"));
         }
         if (delta.getDeltaRecovered() > 0L) {
-            recovered = true;
             include = true;
             textLine = textLine.concat(String.format("%s%d %s",
                     confirmed || deaths ? ", " : "",
@@ -273,42 +292,15 @@ public class Covid19TelegramApp {
     }
 
     private static void initEnv() {
-        if (isNull(System.getenv("BOOTSTRAP_SERVERS"))) {
-            LOG.error("Environment variable BOOTSTRAP_SERVERS must be set!");
-            System.exit(-1);
-        }
-        if (isNull(System.getenv("KAFKA_APPLICATION_ID"))) {
-            LOG.error("Environment variable KAFKA_APPLICATION_ID must be set!");
-            System.exit(-1);
-        }
-        if (isNull(System.getenv("KAFKA_TOPIC_POSTED_MESSAGES"))) {
-            LOG.error("Environment variable KAFKA_TOPIC_POSTED_MESSAGES must be set!");
-            System.exit(-1);
-        }
-        if (isNull(System.getenv("KAFKA_TOPIC_ALERTS"))) {
-            LOG.error("Environment variable KAFKA_TOPIC_ALERTS must be set!");
-            System.exit(-1);
-        }
-        if (isNull(System.getenv("TELEGRAM_BOT_TOKEN"))) {
-            LOG.error("Environment variable TELEGRAM_BOT_TOKEN must be set!");
-            System.exit(-1);
-        }
-        if (isNull(System.getenv("TELEGRAM_BOT_USERNAME"))) {
-            LOG.error("Environment variable TELEGRAM_BOT_TOKEN must be set!");
-            System.exit(-1);
-        }
-        if (isNull(System.getenv("TELEGRAM_CHAT_ID"))) {
-            LOG.error("Environment variable TELEGRAM_CHAT_ID must be set!");
-            System.exit(-1);
-        }
-        if (isNull(System.getenv("TELEGRAM_CREATOR_ID"))) {
-            LOG.error("Environment variable TELEGRAM_CREATOR_ID must be set!");
-            System.exit(-1);
-        }
-        if (isNull(System.getenv("TELEGRAM_DB_PATH"))) {
-            LOG.error("Environment variable TELEGRAM_DB_PATH must be set!");
-            System.exit(-1);
-        }
+        checkEnv("BOOTSTRAP_SERVERS");
+        checkEnv("KAFKA_APPLICATION_ID");
+        checkEnv("KAFKA_TOPIC_POSTED_MESSAGES");
+        checkEnv("KAFKA_TOPIC_ALERTS");
+        checkEnv("TELEGRAM_BOT_TOKEN");
+        checkEnv("TELEGRAM_BOT_USERNAME");
+        checkEnv("TELEGRAM_CHAT_ID");
+        checkEnv("TELEGRAM_CREATOR_ID");
+        checkEnv("TELEGRAM_DB_PATH");
 
         BOOTSTRAP_SERVERS = System.getenv("BOOTSTRAP_SERVERS");
         APPLICATION_ID = System.getenv("KAFKA_APPLICATION_ID");
@@ -320,6 +312,13 @@ public class Covid19TelegramApp {
         TELEGRAM_DB_PATH = System.getenv("TELEGRAM_DB_PATH");
         CHANNEL_CHAT_ID = System.getenv("TELEGRAM_CHAT_ID");
         TELEGRAM_CREATOR_ID = System.getenv("TELEGRAM_CREATOR_ID");
+    }
+
+    private static void checkEnv(String variable) {
+        if (isNull(System.getenv(variable))) {
+            LOG.error("Environment variable {} must be set!", variable);
+            System.exit(-1);
+        }
     }
 
     private static void sendTelegramAlert(Covid19Bot bot, String chatId, String alertText, Integer replyId, boolean notification) {

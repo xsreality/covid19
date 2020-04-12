@@ -14,10 +14,14 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
+import org.apache.kafka.streams.kstream.TimeWindows;
+import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.WindowStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Duration;
 import java.util.Properties;
 
 import static java.lang.Long.parseLong;
@@ -56,32 +60,6 @@ public class Covid19Stats {
 
         final StreamsBuilder builder = new StreamsBuilder();
 
-        // build KStream from patient alerts topic
-        final KStream<String, PatientAndMessage> patientAlerts = builder.stream(KAFKA_TOPIC_PATIENT_ALERTS, Consumed.with(stringSerde, patientAndMessageSerde));
-
-        // build KStream of patient and current status and store in new topic
-        final KStream<String, String> patientCurrentStatus = patientAlerts
-                // need these filters to clear out old invalid data
-                .filter((patientNumber, patientAndMessage) ->
-                        nonNull(patientAndMessage.getPatientInfo()) && nonNull(patientNumber) && !patientNumber.isEmpty() && !patientAndMessage.getPatientInfo().getCurrentStatus().isEmpty())
-                .mapValues((patientNumber, patientAndMessage) -> patientAndMessage.getPatientInfo().getCurrentStatus());
-
-        patientCurrentStatus.to("patient-current-status", Produced.with(stringSerde, stringSerde));
-
-        // read the topic as KTable so that updates are read correctly
-        final KTable<String, String> patientCurrentStatusTable = builder.table("patient-current-status", Materialized.with(stringSerde, stringSerde));
-
-        // count the occurrences of current status
-        KTable<String, Long> currentStatusCount = patientCurrentStatusTable
-                .groupBy((patientNumber, patientStatus) -> KeyValue.pair(patientStatus, patientStatus), Grouped.with(stringSerde, stringSerde))
-                .count(Materialized.with(stringSerde, longSerde));
-
-        // output results to a topic
-        currentStatusCount.toStream()
-                .peek((key, value) -> LOG.info("Status: {}, Count: {}", key, value))
-                .to(KAFKA_TOPIC_PATIENT_STATUS_COUNT, Produced.with(stringSerde, longSerde));
-
-
         // build the statewise delta stats of recovery, death and confirmed Covid19 cases
         // This KTable is read by covid19-telegram-bot to send statewise delta updates
         builder.table("statewise-data",
@@ -107,8 +85,35 @@ public class Covid19Stats {
                         }, (state, oldStatewiseStats, aggregate) -> aggregate,
                         Materialized.<String, StatewiseDelta, KeyValueStore<Bytes, byte[]>>as("statewise-delta")
                                 .withKeySerde(stringSerde)
-                                .withValueSerde(statewiseDeltaSerde));
+                                .withValueSerde(statewiseDeltaSerde))
+                .toStream()
+                .to("statewise-delta-stats", Produced.with(stringSerde, statewiseDeltaSerde));
 
+
+        // topology to build daily incremental stats
+        builder.stream("org.covid19.patient-status-stats-statewise-delta-changelog",
+                Consumed.with(stringSerde, statewiseDeltaSerde))
+                .groupByKey(Grouped.with(stringSerde, statewiseDeltaSerde))
+                .windowedBy(TimeWindows.of(Duration.ofDays(1L)))
+                .aggregate(StatewiseDelta::new, (state, newDelta, aggregate) -> {
+                    aggregate.setDeltaConfirmed(aggregate.getDeltaConfirmed() + newDelta.getDeltaConfirmed());
+                    aggregate.setDeltaRecovered(aggregate.getDeltaRecovered() + newDelta.getDeltaRecovered());
+                    aggregate.setDeltaDeaths(aggregate.getDeltaDeaths() + newDelta.getDeltaDeaths());
+
+                    aggregate.setCurrentConfirmed(newDelta.getCurrentConfirmed());
+                    aggregate.setCurrentRecovered(newDelta.getCurrentRecovered());
+                    aggregate.setCurrentDeaths(newDelta.getCurrentDeaths());
+
+                    aggregate.setState(newDelta.getState());
+                    aggregate.setLastUpdatedTime(newDelta.getLastUpdatedTime());
+                    return aggregate;
+                }, Materialized.<String, StatewiseDelta, WindowStore<Bytes, byte[]>>as("statewise-windowed-daily")
+                        .withKeySerde(stringSerde)
+                        .withValueSerde(statewiseDeltaSerde)
+                        .withCachingDisabled())
+                .toStream()
+                .map((Windowed<String> key, StatewiseDelta delta) -> new KeyValue<>(key.key(), delta))
+                .to("statewise-daily-stats", Produced.with(stringSerde, statewiseDeltaSerde));
 
         final KafkaStreams streams = new KafkaStreams(builder.build(), streamsConfiguration);
 

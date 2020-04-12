@@ -87,7 +87,6 @@ public class KafkaStreamsConfig {
                         LOG.info("Sending telegram alert to {} of patient #{}", userId, patientNumber);
                         sendTelegramAlert(covid19Bot, userId, alertText, null, false);
                     });
-                    // this is now redundant as we store the patientNumber->messageId mapping in Telegram Embedded DB
                     return PatientAndMessage.builder().message(null).patientInfo(patientAndMessage.getPatientInfo()).build();
                 })
                 .filter((patientNumber, patientAndMessage) -> nonNull(patientAndMessage))

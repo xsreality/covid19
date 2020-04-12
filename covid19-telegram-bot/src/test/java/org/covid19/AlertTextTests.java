@@ -7,6 +7,9 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static org.covid19.TelegramUtils.buildDeltaAlertLine;
+import static org.covid19.TelegramUtils.buildStatewiseAlertText;
+import static org.covid19.TelegramUtils.buildSummaryAlertBlock;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class AlertTextTests {
@@ -17,7 +20,7 @@ public class AlertTextTests {
         AtomicReference<String> actualAlertText = new AtomicReference<>("");
 
         StatewiseDelta delta = new StatewiseDelta(0L, 0L, 1L, 0L, 0L, 0L, "", "Delhi");
-        Covid19TelegramApp.buildDeltaAlertLine(actualAlertText, delta);
+        buildDeltaAlertLine(actualAlertText, delta);
 
         assertEquals(expectedAlertText, actualAlertText.get(), "Alert text is not structured correctly!");
     }
@@ -28,7 +31,7 @@ public class AlertTextTests {
         AtomicReference<String> actualAlertText = new AtomicReference<>("");
 
         StatewiseDelta delta = new StatewiseDelta(0L, 0L, 10L, 0L, 0L, 0L, "", "Delhi");
-        Covid19TelegramApp.buildDeltaAlertLine(actualAlertText, delta);
+        buildDeltaAlertLine(actualAlertText, delta);
 
         assertEquals(expectedAlertText, actualAlertText.get(), "Alert text is not structured correctly!");
     }
@@ -38,19 +41,19 @@ public class AlertTextTests {
         String expectedAlertText = "15 new cases, 9 recoveries in Maharashtra\n";
         AtomicReference<String> actualAlertText = new AtomicReference<>("");
         StatewiseDelta delta = new StatewiseDelta(9L, 0L, 15L, 0L, 0L, 0L, "", "Maharashtra");
-        Covid19TelegramApp.buildDeltaAlertLine(actualAlertText, delta);
+        buildDeltaAlertLine(actualAlertText, delta);
         assertEquals(expectedAlertText, actualAlertText.get(), "Alert text is not structured correctly!");
 
         expectedAlertText = "15 new cases, 4 deaths in Delhi\n";
         actualAlertText = new AtomicReference<>("");
         delta = new StatewiseDelta(0L, 4L, 15L, 0L, 0L, 0L, "", "Delhi");
-        Covid19TelegramApp.buildDeltaAlertLine(actualAlertText, delta);
+        buildDeltaAlertLine(actualAlertText, delta);
         assertEquals(expectedAlertText, actualAlertText.get(), "Alert text is not structured correctly!");
 
         expectedAlertText = "3 deaths, 9 recoveries in Delhi\n";
         actualAlertText = new AtomicReference<>("");
         delta = new StatewiseDelta(9L, 3L, 0L, 0L, 0L, 0L, "", "Delhi");
-        Covid19TelegramApp.buildDeltaAlertLine(actualAlertText, delta);
+        buildDeltaAlertLine(actualAlertText, delta);
         assertEquals(expectedAlertText, actualAlertText.get(), "Alert text is not structured correctly!");
     }
 
@@ -66,7 +69,7 @@ public class AlertTextTests {
 
         List<StatewiseDelta> deltas = Collections.singletonList(new StatewiseDelta(9L, 4L, 15L, 455L, 157L, 5341L, "", "Total"));
         List<StatewiseDelta> dailies = Collections.singletonList(new StatewiseDelta(9L, 4L, 15L, 0L, 0L, 0L, "", "Total"));
-        Covid19TelegramApp.buildSummaryAlertBlock(actualSummaryBlock, deltas, dailies);
+        buildSummaryAlertBlock(actualSummaryBlock, deltas, dailies);
 
         assertEquals(expectedSummaryBlock, actualSummaryBlock.get(), "Summary block is not structured correctly!");
     }
@@ -110,7 +113,7 @@ public class AlertTextTests {
                 new StatewiseDelta(0L, 0L, 9L, 1L, 2L, 27L, "08/04/2020 00:04:28", "Himachal Pradesh"),
                 new StatewiseDelta(0L, 0L, 9L, 455L, 157L, 5341L, "08/04/2020 00:04:28", "Total"));
 
-        final String actualFinalAlert = Covid19TelegramApp.buildStatewiseAlertText(lastUpdated, deltas, dailies);
+        final String actualFinalAlert = buildStatewiseAlertText(lastUpdated, deltas, dailies);
 
         assertEquals(expectedFinalAlert, actualFinalAlert, "Summary block is not structured correctly!");
     }

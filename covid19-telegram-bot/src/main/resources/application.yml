@@ -1,0 +1,17 @@
+telegram:
+  bot.username: covid19_india_alerts_bot
+  db.path: /tmp/telegram.db
+
+spring:
+  kafka:
+    streams:
+      application-id: "org.covid19.patient-telegram-bot"
+      client-id: "org.covid19.patient-telegram-bot-client"
+      bootstrap-servers: "localhost:9092"
+      cache-max-size-buffering: 0
+    consumer:
+      group-id: "org.covid19.patient-telegram-bot-consumer"
+      client-id: "org.covid19.patient-telegram-bot-consumer-client"
+      bootstrap-servers: "localhost:9092"
+      max-poll-records: 100
+      auto-offset-reset: earliest

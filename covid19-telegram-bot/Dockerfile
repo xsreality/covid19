@@ -1,4 +1,4 @@
 FROM openjdk:8-jre-slim
-COPY ./target/covid19-telegram-bot-1.0-SNAPSHOT-jar-with-dependencies.jar /usr/app/
+COPY ./target/covid19-telegram-bot-1.0-SNAPSHOT.jar /usr/app/
 WORKDIR /usr/app
-ENTRYPOINT ["java", "-jar", "covid19-telegram-bot-1.0-SNAPSHOT-jar-with-dependencies.jar"]
+ENTRYPOINT ["java", "-jar", "covid19-telegram-bot-1.0-SNAPSHOT.jar"]

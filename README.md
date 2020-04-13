@@ -23,4 +23,4 @@ if the update is significant. Currently this means either changes in status or n
 
 ## Architecture
 
-![Kafka Streams Architecture](https://i.ibb.co/d4Ld2TW/Covid19-India-Alerts-1.png "Covid19 Kafka Streams Architecture")
+![Kafka Streams Architecture](https://i.ibb.co/r2zJFL2/Covid19-India-Alerts-2.png "Covid19 Kafka Streams Architecture")

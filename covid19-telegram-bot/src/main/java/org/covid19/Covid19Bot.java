@@ -315,6 +315,7 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
                 .next(northEastIndiaFlow)
                 .next(westIndiaFlow)
                 .next(southIndiaFlow)
+                .next(sendRequestToKafka(isMessage("Total")))
                 .build();
     }
 
@@ -378,6 +379,10 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
         row = new KeyboardRow();
         row.add("West India");
         row.add("South India");
+        keyboard.add(row);
+
+        row = new KeyboardRow();
+        row.add("Total");
         keyboard.add(row);
 
         markup.setKeyboard(keyboard);

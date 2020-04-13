@@ -1,6 +1,5 @@
 package org.covid19;
 
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KafkaStreams;
@@ -29,11 +28,20 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import lombok.extern.slf4j.Slf4j;
 
+import static io.confluent.kafka.serializers.KafkaJsonDeserializerConfig.JSON_VALUE_TYPE;
+import static java.util.Collections.singletonList;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.CLIENT_ID_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.covid19.TelegramUtils.buildStatewiseAlertText;
+import static org.covid19.TelegramUtils.buildSummaryAlertBlock;
 import static org.covid19.TelegramUtils.fireStatewiseTelegramAlert;
+import static org.covid19.TelegramUtils.sendTelegramAlert;
 import static org.covid19.Utils.friendlyTime;
 import static org.covid19.Utils.initStateCodes;
 
@@ -46,6 +54,7 @@ public class StatsAlertConsumerConfig {
     private final Serde<String> stringSerde;
     private final Covid19Bot covid19Bot;
     private ReadOnlyKeyValueStore<String, StatewiseDelta> dailyStatsStore;
+    private ReadOnlyKeyValueStore<String, StatewiseDelta> deltaStatsStore;
     private KafkaListenerEndpointRegistry registry;
     final static Map<String, String> stateCodes;
 
@@ -60,29 +69,55 @@ public class StatsAlertConsumerConfig {
         this.stringSerde = Serdes.String();
     }
 
-
+    // consumer setup for statewise alerts
     @Bean
-    public Map<String, Object> consumerConfigs() {
+    public Map<String, Object> statewiseAlertsConsumerConfigs() {
         Map<String, Object> props = new HashMap<>(kafkaProperties.buildConsumerProperties());
-        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, stringSerde.deserializer().getClass().getName());
-        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "io.confluent.kafka.serializers.KafkaJsonDeserializer");
-        props.put("json.value.type", StatewiseDelta.class);
+        props.put(KEY_DESERIALIZER_CLASS_CONFIG, stringSerde.deserializer().getClass().getName());
+        props.put(VALUE_DESERIALIZER_CLASS_CONFIG, "io.confluent.kafka.serializers.KafkaJsonDeserializer");
+        props.put(JSON_VALUE_TYPE, StatewiseDelta.class);
         return props;
     }
 
     @Bean
-    public ConsumerFactory<String, StatewiseDelta> consumerFactory() {
-        return new DefaultKafkaConsumerFactory<>(consumerConfigs());
+    public ConsumerFactory<String, StatewiseDelta> statewiseAlertsConsumerFactory() {
+        return new DefaultKafkaConsumerFactory<>(statewiseAlertsConsumerConfigs());
     }
 
     @Bean
-    public ConcurrentKafkaListenerContainerFactory<String, StatewiseDelta> kafkaListenerContainerFactory() {
+    public ConcurrentKafkaListenerContainerFactory<String, StatewiseDelta> statewiseAlertsKafkaListenerContainerFactory() {
         ConcurrentKafkaListenerContainerFactory<String, StatewiseDelta> factory = new ConcurrentKafkaListenerContainerFactory<>();
-        factory.setConsumerFactory(consumerFactory());
+        factory.setConsumerFactory(statewiseAlertsConsumerFactory());
         factory.setMissingTopicsFatal(false);
         factory.setBatchListener(true);
         return factory;
     }
+
+    // consumer setup for user requests
+    @Bean
+    public Map<String, Object> userRequestsConsumerConfigs() {
+        Map<String, Object> props = new HashMap<>(kafkaProperties.buildConsumerProperties());
+        props.put(GROUP_ID_CONFIG, "org.covid19.patient-telegram-bot-user-requests-consumer");
+        props.put(CLIENT_ID_CONFIG, "org.covid19.patient-telegram-bot-user-requests-consumer-client");
+        props.put(KEY_DESERIALIZER_CLASS_CONFIG, stringSerde.deserializer().getClass().getName());
+        props.put(VALUE_DESERIALIZER_CLASS_CONFIG, "io.confluent.kafka.serializers.KafkaJsonDeserializer");
+        props.put(JSON_VALUE_TYPE, UserRequest.class);
+        return props;
+    }
+
+    @Bean
+    public ConsumerFactory<String, UserRequest> userRequestsConsumerFactory() {
+        return new DefaultKafkaConsumerFactory<>(userRequestsConsumerConfigs());
+    }
+
+    @Bean
+    public ConcurrentKafkaListenerContainerFactory<String, UserRequest> userRequestsKafkaListenerContainerFactory() {
+        ConcurrentKafkaListenerContainerFactory<String, UserRequest> factory = new ConcurrentKafkaListenerContainerFactory<>();
+        factory.setConsumerFactory(userRequestsConsumerFactory());
+        factory.setMissingTopicsFatal(false);
+        return factory;
+    }
+
 
     @Bean
     public CountDownLatch latch(StreamsBuilderFactoryBean fb) {
@@ -96,15 +131,22 @@ public class StatsAlertConsumerConfig {
     }
 
     @Bean
-    public ApplicationRunner runner(StreamsBuilderFactoryBean fb, KTable<String, StatewiseDelta> dailyStatsTable) {
+    public ApplicationRunner runner(StreamsBuilderFactoryBean fb,
+                                    KTable<String, StatewiseDelta> dailyStatsTable,
+                                    KTable<String, StatewiseDelta> deltaStatsTable) {
         return args -> {
             latch(fb).await(100, TimeUnit.SECONDS);
             dailyStatsStore = fb.getKafkaStreams().store(dailyStatsTable.queryableStoreName(), QueryableStoreTypes.keyValueStore());
-            registry.getListenerContainer("statewiseAlertsConsumer").start(); // start consumer only after state store is ready.
+            deltaStatsStore = fb.getKafkaStreams().store(deltaStatsTable.queryableStoreName(), QueryableStoreTypes.keyValueStore());
+            // start consumers only after state store is ready.
+            registry.getListenerContainer("statewiseAlertsConsumer").start();
+            registry.getListenerContainer("userRequestsConsumer").start();
         };
     }
 
-    @KafkaListener(topics = "statewise-delta-stats", id = "statewiseAlertsConsumer", idIsGroup = false, autoStartup = "false")
+    @KafkaListener(topics = "statewise-delta-stats", id = "statewiseAlertsConsumer",
+            idIsGroup = false, autoStartup = "false",
+            containerFactory = "statewiseAlertsKafkaListenerContainerFactory")
     public void listenDeltaStats(@Payload List<StatewiseDelta> deltas) {
         try {
             // strategic delay to allow the other topology to process
@@ -135,6 +177,17 @@ public class StatsAlertConsumerConfig {
         }
         fireStatewiseTelegramAlert(covid19Bot, buildStatewiseAlertText(friendlyTime(lastUpdated), readyToSend, dailyIncrements));
         readyToSend.clear();
+    }
+
+    @KafkaListener(topics = "user-request", id = "userRequestsConsumer",
+            idIsGroup = false, autoStartup = "false",
+            containerFactory = "userRequestsKafkaListenerContainerFactory")
+    public void listenForUserRequests(@Payload UserRequest request) {
+        StatewiseDelta delta = deltaStatsStore.get(request.getState());
+        StatewiseDelta daily = dailyStatsStore.get(request.getState());
+        AtomicReference<String> alertText = new AtomicReference<>("");
+        buildSummaryAlertBlock(alertText, singletonList(delta), singletonList(daily));
+        sendTelegramAlert(covid19Bot, request.getChatId(), alertText.get(), null, true);
     }
 
     @Scheduled(cron = "0 20 4,8,12,16,18 * * ?")

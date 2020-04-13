@@ -68,6 +68,14 @@ public class KafkaStreamsConfig {
     }
 
     @Bean
+    public KTable<String, StatewiseDelta> deltaStatsTable(StreamsBuilder streamsBuilder) {
+        return streamsBuilder.table("statewise-delta-stats",
+                Materialized.<String, StatewiseDelta, KeyValueStore<Bytes, byte[]>>as(
+                        Stores.persistentKeyValueStore("statewise-delta-persistent").name())
+                        .withKeySerde(stringSerde).withValueSerde(new StatewiseDeltaSerde()).withCachingDisabled());
+    }
+
+    @Bean
     public KStream<String, PatientAndMessage> individualPatientAlerts(StreamsBuilder kStreamBuilder) {
         final KStream<String, PatientAndMessage> alerts = kStreamBuilder.stream("send-alerts",
                 Consumed.with(stringSerde, patientAndMessageSerde));

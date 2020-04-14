@@ -47,6 +47,7 @@ public class Covid19Stats {
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, BOOTSTRAP_SERVERS);
 //        streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 20 * 1024 * 1024L);
         streamsConfiguration.put(StreamsConfig.TOPOLOGY_OPTIMIZATION, "all");
+        streamsConfiguration.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 3);
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         // Records should be flushed every 10 seconds. This is less than the default
         // in order to keep this example interactive.

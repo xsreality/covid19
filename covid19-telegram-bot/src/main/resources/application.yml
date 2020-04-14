@@ -15,3 +15,6 @@ spring:
       bootstrap-servers: "localhost:9092"
       max-poll-records: 100
       auto-offset-reset: earliest
+    producer:
+      client-id: "org.covid19.patient-telegram-bot-user-request-producer"
+      bootstrap-servers: "localhost:9092"

@@ -24,3 +24,20 @@ if the update is significant. Currently this means either changes in status or n
 ## Architecture
 
 ![Kafka Streams Architecture](https://i.ibb.co/r2zJFL2/Covid19-India-Alerts-2.png "Covid19 Kafka Streams Architecture")
+
+## On-demand Statistics - Telegram command `/stats`
+
+To get the current statistics of any Indian State or Total, send the command `/stats`.
+
+The bot will reply with an option to choose a region:
+
+![Telegram command /stats choose region](https://i.ibb.co/MPv3jk5/Screenshot-20200413-184036.jpg "Telegram command /stats choose region")
+
+You can select any region or choose `Total` to get cumulative sum of all Indian states. If you choose
+a region, next screen will pop-up asking to choose a state within the region.
+
+![Telegram command /stats choose state](https://i.ibb.co/gPX3tjw/Screenshot-20200413-184138.jpg "Telegram command /stats choose state")
+
+You should get back the cumulative statistics of the chosen state at that point of time.
+
+![Telegram command /stats state summary](https://i.ibb.co/Y2m1Rhk/Screenshot-20200413-184246.jpg "Telegram command /stats state summary")

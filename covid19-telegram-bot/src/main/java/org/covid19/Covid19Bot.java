@@ -111,8 +111,8 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
                     }
 
                     String message = newUser ?
-                            "Congratulations! You are now subscribed to Covid19 India Patient alerts! Stay safe and keep social distancing!"
-                            : "You are already subscribed to Covid19 India Patient alerts!";
+                            "Congratulations! You are now subscribed to Covid19 India Patient alerts! Send /stats to get statistics. Stay safe and keep social distancing!"
+                            : "You are already subscribed to Covid19 India Patient alerts! Send /stats to get statistics.";
                     silent.send(message, ctx.chatId());
                 })
                 .post(ctx -> {

@@ -23,6 +23,12 @@ if the update is significant. Currently this means either changes in status or n
 
 ## Architecture
 
+### Individual Patient Updates
+
+![Kafka Streams Individual Patient Updates](https://i.ibb.co/MPZJjB3/Covid19-India-Alerts-3.png "Kafka Streams Individual Patient Updates")
+
+### Cumulative + Delta + Daily Increase Updates
+
 ![Kafka Streams Architecture](https://i.ibb.co/r2zJFL2/Covid19-India-Alerts-2.png "Covid19 Kafka Streams Architecture")
 
 ## On-demand Statistics - Telegram command `/stats`

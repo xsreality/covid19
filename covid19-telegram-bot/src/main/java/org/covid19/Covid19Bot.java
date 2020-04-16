@@ -18,15 +18,20 @@ import org.telegram.abilitybots.api.objects.Privacy;
 import org.telegram.abilitybots.api.objects.Reply;
 import org.telegram.abilitybots.api.objects.ReplyFlow;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
+import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText;
 import org.telegram.telegrambots.meta.api.objects.Update;
-import org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboardMarkup;
-import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.KeyboardRow;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
+
+import static java.util.Arrays.asList;
+import static org.covid19.TelegramUtils.translateName;
+import static org.telegram.abilitybots.api.objects.Locality.USER;
+import static org.telegram.abilitybots.api.objects.Privacy.CREATOR;
 
 public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
     private static final Logger LOG = LoggerFactory.getLogger(Covid19Bot.class);
@@ -160,8 +165,8 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
                 .builder()
                 .name("dbsummary")
                 .info("Subscribe to Covid19 India patient alerts")
-                .locality(Locality.USER)
-                .privacy(Privacy.CREATOR)
+                .locality(USER)
+                .privacy(CREATOR)
                 .input(0)
                 .action(ctx -> {
                     final String summary = db.summary();
@@ -175,7 +180,7 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
     public Ability manuallyAdd() {
         return Ability
                 .builder().name("add").info("Manually subscribe a user to Covid19 India patient alerts")
-                .locality(Locality.USER).privacy(Privacy.CREATOR).input(1)
+                .locality(USER).privacy(CREATOR).input(1)
                 .action(ctx -> {
                     List<String> subscribedUsers = db.getList(SUBSCRIBED_USERS);
                     if (subscribedUsers.contains(ctx.firstArg())) {
@@ -194,7 +199,7 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
     public Ability manuallyRemove() {
         return Ability
                 .builder().name("remove").info("Manually unsubscribe a user to Covid19 India patient alerts")
-                .locality(Locality.USER).privacy(Privacy.CREATOR).input(1)
+                .locality(USER).privacy(CREATOR).input(1)
                 .action(ctx -> {
                     List<String> subscribedUsers = db.getList(SUBSCRIBED_USERS);
                     if (!subscribedUsers.contains(ctx.firstArg())) {
@@ -211,10 +216,9 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
 
     @SuppressWarnings("unused")
     public Ability listSubscribedUsers() {
-        //noinspection unchecked
         return Ability
                 .builder().name("list").info("List all subscribed users of Covid19 India patient alerts")
-                .locality(Locality.USER).privacy(Privacy.CREATOR).input(0)
+                .locality(USER).privacy(CREATOR).input(0)
                 .action(ctx -> {
                     List<String> subscribedUsers = db.getList(SUBSCRIBED_USERS);
                     AtomicReference<String> listOfUsers = new AtomicReference<>("");
@@ -251,56 +255,56 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
     public ReplyFlow stateSelectionFlow() {
         final ReplyFlow northIndiaFlow = ReplyFlow.builder(db, 2)
                 .action(upd -> {
-                    SendMessage msg = buildNorthIndianStatesKeyboard(getChatId(upd));
+                    EditMessageText msg = buildNorthIndianStatesKeyboard(upd);
                     silent.execute(msg);
                 })
-                .onlyIf(isMessage("North India"))
-                .next(sendRequestToKafka(isNorthIndianState()))
+                .onlyIf(isCallbackOrMessage("North India"))
+                .next(sendRequestToKafka(isAnyState()))
                 .build();
 
         final ReplyFlow centralIndiaFlow = ReplyFlow.builder(db, 2)
                 .action(upd -> {
-                    SendMessage msg = buildCentralIndianStatesKeyboard(getChatId(upd));
+                    EditMessageText msg = buildCentralIndianStatesKeyboard(upd);
                     silent.execute(msg);
                 })
-                .onlyIf(isMessage("Central India"))
-                .next(sendRequestToKafka(isCentralIndianState()))
+                .onlyIf(isCallbackOrMessage("Central India"))
+                .next(sendRequestToKafka(isAnyState()))
                 .build();
 
         final ReplyFlow eastIndiaFlow = ReplyFlow.builder(db, 2)
                 .action(upd -> {
-                    SendMessage msg = buildEastIndianStatesKeyboard(getChatId(upd));
+                    EditMessageText msg = buildEastIndianStatesKeyboard(upd);
                     silent.execute(msg);
                 })
-                .onlyIf(isMessage("East India"))
-                .next(sendRequestToKafka(isEastIndianState()))
+                .onlyIf(isCallbackOrMessage("East India"))
+                .next(sendRequestToKafka(isAnyState()))
                 .build();
 
         final ReplyFlow northEastIndiaFlow = ReplyFlow.builder(db, 2)
                 .action(upd -> {
-                    SendMessage msg = buildNorthEastIndianStatesKeyboard(getChatId(upd));
+                    EditMessageText msg = buildNorthEastIndianStatesKeyboard(upd);
                     silent.execute(msg);
                 })
-                .onlyIf(isMessage("North East India"))
-                .next(sendRequestToKafka(isNorthEastIndianState()))
+                .onlyIf(isCallbackOrMessage("North East India"))
+                .next(sendRequestToKafka(isAnyState()))
                 .build();
 
         final ReplyFlow westIndiaFlow = ReplyFlow.builder(db, 2)
                 .action(upd -> {
-                    SendMessage msg = buildWestIndianStatesKeyboard(getChatId(upd));
+                    EditMessageText msg = buildWestIndianStatesKeyboard(upd);
                     silent.execute(msg);
                 })
-                .onlyIf(isMessage("West India"))
-                .next(sendRequestToKafka(isWestIndianState()))
+                .onlyIf(isCallbackOrMessage("West India"))
+                .next(sendRequestToKafka(isAnyState()))
                 .build();
 
         final ReplyFlow southIndiaFlow = ReplyFlow.builder(db, 2)
                 .action(upd -> {
-                    SendMessage msg = buildSouthIndianStatesKeyboard(getChatId(upd));
+                    EditMessageText msg = buildSouthIndianStatesKeyboard(upd);
                     silent.execute(msg);
                 })
-                .onlyIf(isMessage("South India"))
-                .next(sendRequestToKafka(isSouthIndianState()))
+                .onlyIf(isCallbackOrMessage("South India"))
+                .next(sendRequestToKafka(isAnyState()))
                 .build();
 
         return ReplyFlow.builder(db, 1)
@@ -308,114 +312,82 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
                     SendMessage msg = buildRegionKeyboard(getChatId(update));
                     silent.execute(msg);
                 })
-                .onlyIf(isMessage("/stats"))
+                .onlyIf(isCallbackOrMessage("/stats"))
                 .next(northIndiaFlow)
                 .next(centralIndiaFlow)
                 .next(eastIndiaFlow)
                 .next(northEastIndiaFlow)
                 .next(westIndiaFlow)
                 .next(southIndiaFlow)
-                .next(sendRequestToKafka(isMessage("Total")))
+                .next(sendRequestToKafka(isCallbackOrMessage("Total")))
+                .next(sendRequestToKafka(isCallbackOrMessage("Summary")))
                 .build();
     }
 
     private Reply sendRequestToKafka(Predicate<Update> predicate) {
         return Reply.of(upd -> {
-            kafkaTemplate.send("user-request", getChatId(upd), new UserRequest(getChatId(upd), upd.getMessage().getText()));
+            String chatId = String.valueOf(upd.getCallbackQuery().getMessage().getChatId());
+            String state = upd.getCallbackQuery().getData();
+
+            kafkaTemplate.send("user-request", getChatId(upd), new UserRequest(chatId, state));
+
+            EditMessageText msg = new EditMessageText();
+            msg.setChatId(upd.getCallbackQuery().getMessage().getChatId());
+            msg.setMessageId(upd.getCallbackQuery().getMessage().getMessageId());
+            msg.setText("Fetching latest status of " + state + "...");
+            silent.execute(msg);
+
+            // send an update to Bot channel
+            String channelMsg = String.format("User %s (%s) requested stats for %s", chatId, translateName(upd.getCallbackQuery().getMessage().getChat()), state);
+            silent.send(channelMsg, CHANNEL_ID);
         }, predicate);
     }
 
     private String getChatId(Update update) {
-        return String.valueOf(update.getMessage().getChatId());
+        return update.hasMessage() ?
+                String.valueOf(update.getMessage().getChatId()) :
+                String.valueOf(update.getCallbackQuery().getMessage().getChatId());
     }
 
-    private Predicate<Update> isNorthIndianState() {
-        return upd -> Arrays.asList(NORTH_INDIAN_STATES).contains(upd.getMessage().getText());
+    private Predicate<Update> isAnyState() {
+        return upd -> {
+            String state = upd.getCallbackQuery().getData();
+            return asList(NORTH_INDIAN_STATES).contains(state) || asList(CENTRAL_INDIAN_STATES).contains(state)
+                    || asList(NORTH_EAST_INDIAN_STATES).contains(state) || asList(EAST_INDIAN_STATES).contains(state)
+                    || asList(WEST_INDIAN_STATES).contains(state) || asList(SOUTH_INDIAN_STATES).contains(state);
+        };
     }
 
-    private Predicate<Update> isCentralIndianState() {
-        return upd -> Arrays.asList(CENTRAL_INDIAN_STATES).contains(upd.getMessage().getText());
-    }
-
-    private Predicate<Update> isEastIndianState() {
-        return upd -> Arrays.asList(EAST_INDIAN_STATES).contains(upd.getMessage().getText());
-    }
-
-    private Predicate<Update> isNorthEastIndianState() {
-        return upd -> Arrays.asList(NORTH_EAST_INDIAN_STATES).contains(upd.getMessage().getText());
-    }
-
-    private Predicate<Update> isWestIndianState() {
-        return upd -> Arrays.asList(WEST_INDIAN_STATES).contains(upd.getMessage().getText());
-    }
-
-    private Predicate<Update> isSouthIndianState() {
-        return upd -> Arrays.asList(SOUTH_INDIAN_STATES).contains(upd.getMessage().getText());
-    }
-
-    private Predicate<Update> isMessage(String msg) {
-        return upd -> upd.getMessage().getText().equalsIgnoreCase(msg);
+    private Predicate<Update> isCallbackOrMessage(String msg) {
+        return upd -> (upd.hasMessage() && upd.getMessage().getText().equalsIgnoreCase(msg)) ||
+                (upd.hasCallbackQuery() && upd.getCallbackQuery().getData().equalsIgnoreCase(msg));
     }
 
     @NotNull
     private SendMessage buildRegionKeyboard(String chatId) {
-        ReplyKeyboardMarkup markup = new ReplyKeyboardMarkup();
-        markup.setOneTimeKeyboard(true);
-        markup.setResizeKeyboard(true);
+        InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
         SendMessage msg = new SendMessage();
         msg.setChatId(chatId);
         msg.setText("Choose a region");
-        List<KeyboardRow> keyboard = new ArrayList<>();
-        KeyboardRow row = new KeyboardRow();
-        row.add("North India");
-        row.add("Central India");
+        List<List<InlineKeyboardButton>> keyboard = new ArrayList<>();
+        List<InlineKeyboardButton> row = new ArrayList<>();
+        row.add(new InlineKeyboardButton().setText("North India").setCallbackData("North India"));
+        row.add(new InlineKeyboardButton().setText("Central India").setCallbackData("Central India"));
         keyboard.add(row);
 
-        row = new KeyboardRow();
-        row.add("East India");
-        row.add("North East India");
+        row = new ArrayList<>();
+        row.add(new InlineKeyboardButton().setText("East India").setCallbackData("East India"));
+        row.add(new InlineKeyboardButton().setText("North East India").setCallbackData("North East India"));
         keyboard.add(row);
 
-        row = new KeyboardRow();
-        row.add("West India");
-        row.add("South India");
+        row = new ArrayList<>();
+        row.add(new InlineKeyboardButton().setText("West India").setCallbackData("West India"));
+        row.add(new InlineKeyboardButton().setText("South India").setCallbackData("South India"));
         keyboard.add(row);
 
-        row = new KeyboardRow();
-        row.add("Total");
-        keyboard.add(row);
-
-        markup.setKeyboard(keyboard);
-        msg.setReplyMarkup(markup);
-        return msg;
-    }
-
-    private SendMessage buildNorthIndianStatesKeyboard(String chatId) {
-        ReplyKeyboardMarkup markup = new ReplyKeyboardMarkup();
-        markup.setOneTimeKeyboard(true);
-        markup.setResizeKeyboard(true);
-        SendMessage msg = new SendMessage();
-        msg.setChatId(chatId);
-        msg.setText("Choose a state");
-        List<KeyboardRow> keyboard = new ArrayList<>();
-        KeyboardRow row = new KeyboardRow();
-        row.add("Delhi");
-        row.add("Jammu & Kashmir");
-        keyboard.add(row);
-
-        row = new KeyboardRow();
-        row.add("Himachal Pradesh");
-        row.add("Chandigarh");
-        keyboard.add(row);
-
-        row = new KeyboardRow();
-        row.add("Haryana");
-        row.add("Punjab");
-        keyboard.add(row);
-
-        row = new KeyboardRow();
-        row.add("Rajasthan");
-        row.add("Ladakh");
+        row = new ArrayList<>();
+        row.add(new InlineKeyboardButton().setText("Total").setCallbackData("Total"));
+        row.add(new InlineKeyboardButton().setText("Summary").setCallbackData("Summary"));
         keyboard.add(row);
 
         markup.setKeyboard(keyboard);
@@ -423,22 +395,31 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
         return msg;
     }
 
-    private SendMessage buildCentralIndianStatesKeyboard(String chatId) {
-        ReplyKeyboardMarkup markup = new ReplyKeyboardMarkup();
-        markup.setOneTimeKeyboard(true);
-        markup.setResizeKeyboard(true);
-        SendMessage msg = new SendMessage();
-        msg.setChatId(chatId);
+    private EditMessageText buildNorthIndianStatesKeyboard(Update upd) {
+        InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
+        EditMessageText msg = new EditMessageText();
+        msg.setChatId(upd.getCallbackQuery().getMessage().getChatId());
+        msg.setMessageId(upd.getCallbackQuery().getMessage().getMessageId());
         msg.setText("Choose a state");
-        List<KeyboardRow> keyboard = new ArrayList<>();
-        KeyboardRow row = new KeyboardRow();
-        row.add("Chhattisgarh");
-        row.add("Madhya Pradesh");
+        List<List<InlineKeyboardButton>> keyboard = new ArrayList<>();
+        List<InlineKeyboardButton> row = new ArrayList<>();
+        row.add(new InlineKeyboardButton("Delhi").setCallbackData("Delhi"));
+        row.add(new InlineKeyboardButton("Jammu & Kashmir").setCallbackData("Jammu & Kashmir"));
         keyboard.add(row);
 
-        row = new KeyboardRow();
-        row.add("Uttar Pradesh");
-        row.add("Uttarakhand");
+        row = new ArrayList<>();
+        row.add(new InlineKeyboardButton("Himachal Pradesh").setCallbackData("Himachal Pradesh"));
+        row.add(new InlineKeyboardButton("Chandigarh").setCallbackData("Chandigarh"));
+        keyboard.add(row);
+
+        row = new ArrayList<>();
+        row.add(new InlineKeyboardButton("Haryana").setCallbackData("Haryana"));
+        row.add(new InlineKeyboardButton("Punjab").setCallbackData("Punjab"));
+        keyboard.add(row);
+
+        row = new ArrayList<>();
+        row.add(new InlineKeyboardButton("Rajasthan").setCallbackData("Rajasthan"));
+        row.add(new InlineKeyboardButton("Ladakh").setCallbackData("Ladakh"));
         keyboard.add(row);
 
         markup.setKeyboard(keyboard);
@@ -446,22 +427,21 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
         return msg;
     }
 
-    private SendMessage buildEastIndianStatesKeyboard(String chatId) {
-        ReplyKeyboardMarkup markup = new ReplyKeyboardMarkup();
-        markup.setOneTimeKeyboard(true);
-        markup.setResizeKeyboard(true);
-        SendMessage msg = new SendMessage();
-        msg.setChatId(chatId);
+    private EditMessageText buildCentralIndianStatesKeyboard(Update upd) {
+        InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
+        EditMessageText msg = new EditMessageText();
+        msg.setChatId(upd.getCallbackQuery().getMessage().getChatId());
+        msg.setMessageId(upd.getCallbackQuery().getMessage().getMessageId());
         msg.setText("Choose a state");
-        List<KeyboardRow> keyboard = new ArrayList<>();
-        KeyboardRow row = new KeyboardRow();
-        row.add("Bihar");
-        row.add("Jharkhand");
+        List<List<InlineKeyboardButton>> keyboard = new ArrayList<>();
+        List<InlineKeyboardButton> row = new ArrayList<>();
+        row.add(new InlineKeyboardButton("Chhattisgarh").setCallbackData("Chhattisgarh"));
+        row.add(new InlineKeyboardButton("Madhya Pradesh").setCallbackData("Madhya Pradesh"));
         keyboard.add(row);
 
-        row = new KeyboardRow();
-        row.add("Odisha");
-        row.add("West Bengal");
+        row = new ArrayList<>();
+        row.add(new InlineKeyboardButton("Uttar Pradesh").setCallbackData("Uttar Pradesh"));
+        row.add(new InlineKeyboardButton("Uttarakhand").setCallbackData("Uttarakhand"));
         keyboard.add(row);
 
         markup.setKeyboard(keyboard);
@@ -469,32 +449,21 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
         return msg;
     }
 
-    private SendMessage buildNorthEastIndianStatesKeyboard(String chatId) {
-        ReplyKeyboardMarkup markup = new ReplyKeyboardMarkup();
-        markup.setOneTimeKeyboard(true);
-        markup.setResizeKeyboard(true);
-        SendMessage msg = new SendMessage();
-        msg.setChatId(chatId);
+    private EditMessageText buildEastIndianStatesKeyboard(Update upd) {
+        InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
+        EditMessageText msg = new EditMessageText();
+        msg.setChatId(upd.getCallbackQuery().getMessage().getChatId());
+        msg.setMessageId(upd.getCallbackQuery().getMessage().getMessageId());
         msg.setText("Choose a state");
-        List<KeyboardRow> keyboard = new ArrayList<>();
-        KeyboardRow row = new KeyboardRow();
-        row.add("Arunachal Pradesh");
-        row.add("Assam");
+        List<List<InlineKeyboardButton>> keyboard = new ArrayList<>();
+        List<InlineKeyboardButton> row = new ArrayList<>();
+        row.add(new InlineKeyboardButton("Bihar").setCallbackData("Bihar"));
+        row.add(new InlineKeyboardButton("Jharkhand").setCallbackData("Jharkhand"));
         keyboard.add(row);
 
-        row = new KeyboardRow();
-        row.add("Manipur");
-        row.add("Meghalaya");
-        keyboard.add(row);
-
-        row = new KeyboardRow();
-        row.add("Mizoram");
-        row.add("Nagaland");
-        keyboard.add(row);
-
-        row = new KeyboardRow();
-        row.add("Tripura");
-        row.add("Sikkim");
+        row = new ArrayList<>();
+        row.add(new InlineKeyboardButton("Odisha").setCallbackData("Odisha"));
+        row.add(new InlineKeyboardButton("West Bengal").setCallbackData("West Bengal"));
         keyboard.add(row);
 
         markup.setKeyboard(keyboard);
@@ -502,26 +471,31 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
         return msg;
     }
 
-    private SendMessage buildWestIndianStatesKeyboard(String chatId) {
-        ReplyKeyboardMarkup markup = new ReplyKeyboardMarkup();
-        markup.setOneTimeKeyboard(true);
-        markup.setResizeKeyboard(true);
-        SendMessage msg = new SendMessage();
-        msg.setChatId(chatId);
+    private EditMessageText buildNorthEastIndianStatesKeyboard(Update upd) {
+        InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
+        EditMessageText msg = new EditMessageText();
+        msg.setChatId(upd.getCallbackQuery().getMessage().getChatId());
+        msg.setMessageId(upd.getCallbackQuery().getMessage().getMessageId());
         msg.setText("Choose a state");
-        List<KeyboardRow> keyboard = new ArrayList<>();
-        KeyboardRow row = new KeyboardRow();
-        row.add("Goa");
-        row.add("Gujarat");
+        List<List<InlineKeyboardButton>> keyboard = new ArrayList<>();
+        List<InlineKeyboardButton> row = new ArrayList<>();
+        row.add(new InlineKeyboardButton("Arunachal Pradesh").setCallbackData("Arunachal Pradesh"));
+        row.add(new InlineKeyboardButton("Assam").setCallbackData("Assam"));
         keyboard.add(row);
 
-        row = new KeyboardRow();
-        row.add("Maharashtra");
-        row.add("Dadra and Nagar Haveli");
+        row = new ArrayList<>();
+        row.add(new InlineKeyboardButton("Manipur").setCallbackData("Manipur"));
+        row.add(new InlineKeyboardButton("Meghalaya").setCallbackData("Meghalaya"));
         keyboard.add(row);
 
-        row = new KeyboardRow();
-        row.add("Daman and Diu");
+        row = new ArrayList<>();
+        row.add(new InlineKeyboardButton("Mizoram").setCallbackData("Mizoram"));
+        row.add(new InlineKeyboardButton("Nagaland").setCallbackData("Nagaland"));
+        keyboard.add(row);
+
+        row = new ArrayList<>();
+        row.add(new InlineKeyboardButton("Tripura").setCallbackData("Tripura"));
+        row.add(new InlineKeyboardButton("Sikkim").setCallbackData("Sikkim"));
         keyboard.add(row);
 
         markup.setKeyboard(keyboard);
@@ -529,32 +503,57 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
         return msg;
     }
 
-    private SendMessage buildSouthIndianStatesKeyboard(String chatId) {
-        ReplyKeyboardMarkup markup = new ReplyKeyboardMarkup();
-        markup.setOneTimeKeyboard(true);
-        markup.setResizeKeyboard(true);
-        SendMessage msg = new SendMessage();
-        msg.setChatId(chatId);
+    private EditMessageText buildWestIndianStatesKeyboard(Update upd) {
+        InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
+        EditMessageText msg = new EditMessageText();
+        msg.setChatId(upd.getCallbackQuery().getMessage().getChatId());
+        msg.setMessageId(upd.getCallbackQuery().getMessage().getMessageId());
         msg.setText("Choose a state");
-        List<KeyboardRow> keyboard = new ArrayList<>();
-        KeyboardRow row = new KeyboardRow();
-        row.add("Andhra Pradesh");
-        row.add("Karnataka");
+        List<List<InlineKeyboardButton>> keyboard = new ArrayList<>();
+        List<InlineKeyboardButton> row = new ArrayList<>();
+        row.add(new InlineKeyboardButton("Goa").setCallbackData("Goa"));
+        row.add(new InlineKeyboardButton("Gujarat").setCallbackData("Gujarat"));
         keyboard.add(row);
 
-        row = new KeyboardRow();
-        row.add("Kerala");
-        row.add("Puducherry");
+        row = new ArrayList<>();
+        row.add(new InlineKeyboardButton("Maharashtra").setCallbackData("Maharashtra"));
+        row.add(new InlineKeyboardButton("Dadra and Nagar Haveli").setCallbackData("Dadra and Nagar Haveli"));
         keyboard.add(row);
 
-        row = new KeyboardRow();
-        row.add("Tamil Nadu");
-        row.add("Telangana");
+        row = new ArrayList<>();
+        row.add(new InlineKeyboardButton("Daman and Diu").setCallbackData("Daman and Diu"));
         keyboard.add(row);
 
-        row = new KeyboardRow();
-        row.add("Andaman and Nicobar Islands");
-        row.add("Lakshadweep");
+        markup.setKeyboard(keyboard);
+        msg.setReplyMarkup(markup);
+        return msg;
+    }
+
+    private EditMessageText buildSouthIndianStatesKeyboard(Update upd) {
+        InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
+        EditMessageText msg = new EditMessageText();
+        msg.setChatId(upd.getCallbackQuery().getMessage().getChatId());
+        msg.setMessageId(upd.getCallbackQuery().getMessage().getMessageId());
+        msg.setText("Choose a state");
+        List<List<InlineKeyboardButton>> keyboard = new ArrayList<>();
+        List<InlineKeyboardButton> row = new ArrayList<>();
+        row.add(new InlineKeyboardButton("Andhra Pradesh").setCallbackData("Andhra Pradesh"));
+        row.add(new InlineKeyboardButton("Karnataka").setCallbackData("Karnataka"));
+        keyboard.add(row);
+
+        row = new ArrayList<>();
+        row.add(new InlineKeyboardButton("Kerala").setCallbackData("Kerala"));
+        row.add(new InlineKeyboardButton("Puducherry").setCallbackData("Puducherry"));
+        keyboard.add(row);
+
+        row = new ArrayList<>();
+        row.add(new InlineKeyboardButton("Tamil Nadu").setCallbackData("Tamil Nadu"));
+        row.add(new InlineKeyboardButton("Telangana").setCallbackData("Telangana"));
+        keyboard.add(row);
+
+        row = new ArrayList<>();
+        row.add(new InlineKeyboardButton("Andaman and Nicobar Islands").setCallbackData("Andaman and Nicobar Islands"));
+        row.add(new InlineKeyboardButton("Lakshadweep").setCallbackData("Lakshadweep"));
         keyboard.add(row);
 
         markup.setKeyboard(keyboard);

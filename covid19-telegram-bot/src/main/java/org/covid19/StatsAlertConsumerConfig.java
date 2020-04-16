@@ -38,12 +38,12 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.CLIENT_ID_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
+import static org.covid19.TelegramUtils.buildStateSummaryAlertText;
 import static org.covid19.TelegramUtils.buildStatewiseAlertText;
 import static org.covid19.TelegramUtils.buildSummaryAlertBlock;
 import static org.covid19.TelegramUtils.fireStatewiseTelegramAlert;
 import static org.covid19.TelegramUtils.sendTelegramAlert;
 import static org.covid19.Utils.friendlyTime;
-import static org.covid19.Utils.initStateCodes;
 
 @EnableKafka
 @Configuration
@@ -56,11 +56,6 @@ public class StatsAlertConsumerConfig {
     private ReadOnlyKeyValueStore<String, StatewiseDelta> dailyStatsStore;
     private ReadOnlyKeyValueStore<String, StatewiseDelta> deltaStatsStore;
     private KafkaListenerEndpointRegistry registry;
-    final static Map<String, String> stateCodes;
-
-    static {
-        stateCodes = initStateCodes();
-    }
 
     public StatsAlertConsumerConfig(KafkaProperties kafkaProperties, Covid19Bot covid19Bot, KafkaListenerEndpointRegistry registry) {
         this.kafkaProperties = kafkaProperties;
@@ -183,6 +178,10 @@ public class StatsAlertConsumerConfig {
             idIsGroup = false, autoStartup = "false",
             containerFactory = "userRequestsKafkaListenerContainerFactory")
     public void listenForUserRequests(@Payload UserRequest request) {
+        if ("Summary".equalsIgnoreCase(request.getState())) {
+            sendTelegramAlert(covid19Bot, request.getChatId(), buildStateSummary(), null, true);
+            return;
+        }
         StatewiseDelta delta = deltaStatsStore.get(request.getState());
         StatewiseDelta daily = dailyStatsStore.get(request.getState());
         AtomicReference<String> alertText = new AtomicReference<>("");
@@ -192,6 +191,13 @@ public class StatsAlertConsumerConfig {
 
     @Scheduled(cron = "0 20 4,8,12,16,18 * * ?")
     public void sendSummaryUpdates() {
+        String text = buildStateSummary();
+
+        LOG.info("summary text {}", text);
+        fireStatewiseTelegramAlert(covid19Bot, text);
+    }
+
+    private String buildStateSummary() {
         final KeyValueIterator<String, StatewiseDelta> stats = dailyStatsStore.all();
 
         List<StatewiseDelta> sortedStats = new ArrayList<>();
@@ -201,26 +207,6 @@ public class StatsAlertConsumerConfig {
 
         String lastUpdated = sortedStats.get(0).getLastUpdatedTime();
 
-        String text = String.format("<i>%s</i>\n\n", friendlyTime(lastUpdated));
-        text = text.concat("Summary of all affected Indian States\n\n");
-        text = text.concat("<pre>\n");
-        text = text.concat("State|  Conf|  Rec.| Died\n");
-        text = text.concat("-------------------------\n");
-        for (StatewiseDelta stat : sortedStats) {
-            if ("Total".equalsIgnoreCase(stat.getState())) {
-                total = stat;
-                continue; // show total at the end
-            }
-            if (stat.getCurrentConfirmed() < 1L && stat.getCurrentRecovered() < 1L && stat.getCurrentDeaths() < 1L) {
-                continue; // skip states with zero stats
-            }
-            text = text.concat(String.format("%-5s|%6s|%6s|%5s\n", stateCodes.get(stat.getState()), stat.getCurrentConfirmed(), stat.getCurrentRecovered(), stat.getCurrentDeaths()));
-        }
-        text = text.concat("-------------------------\n");
-        text = text.concat(String.format("%-5s|%6s|%6s|%5s\n", stateCodes.get(total.getState()), total.getCurrentConfirmed(), total.getCurrentRecovered(), total.getCurrentDeaths()));
-        text = text.concat("</pre>");
-
-        LOG.info("summary text {}", text);
-        fireStatewiseTelegramAlert(covid19Bot, text);
+        return buildStateSummaryAlertText(sortedStats, total, lastUpdated);
     }
 }

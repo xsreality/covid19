@@ -351,10 +351,13 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
 
     private Predicate<Update> isAnyState() {
         return upd -> {
-            String state = upd.getCallbackQuery().getData();
-            return asList(NORTH_INDIAN_STATES).contains(state) || asList(CENTRAL_INDIAN_STATES).contains(state)
-                    || asList(NORTH_EAST_INDIAN_STATES).contains(state) || asList(EAST_INDIAN_STATES).contains(state)
-                    || asList(WEST_INDIAN_STATES).contains(state) || asList(SOUTH_INDIAN_STATES).contains(state);
+            if (upd.hasCallbackQuery()) {
+                String state = upd.getCallbackQuery().getData();
+                return asList(NORTH_INDIAN_STATES).contains(state) || asList(CENTRAL_INDIAN_STATES).contains(state)
+                        || asList(NORTH_EAST_INDIAN_STATES).contains(state) || asList(EAST_INDIAN_STATES).contains(state)
+                        || asList(WEST_INDIAN_STATES).contains(state) || asList(SOUTH_INDIAN_STATES).contains(state);
+            }
+            return false;
         };
     }
 

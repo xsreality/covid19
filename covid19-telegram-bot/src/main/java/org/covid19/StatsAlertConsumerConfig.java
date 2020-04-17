@@ -45,6 +45,7 @@ public class StatsAlertConsumerConfig {
     private final Serde<String> stringSerde;
     private final Covid19Bot covid19Bot;
     private final StateStoresManager stateStores;
+    private static String TOTAL = "Total";
 
     public StatsAlertConsumerConfig(KafkaProperties kafkaProperties, Covid19Bot covid19Bot, StateStoresManager stateStores) {
         this.kafkaProperties = kafkaProperties;
@@ -121,8 +122,9 @@ public class StatsAlertConsumerConfig {
         List<StatewiseDelta> readyToSend = new ArrayList<>();
         List<StatewiseDelta> dailyIncrements = new ArrayList<>();
         String lastUpdated = deltas.get(deltas.size() - 1).getLastUpdatedTime();
+
         for (StatewiseDelta delta : deltas) {
-            if ("Total".equalsIgnoreCase(delta.getState())) {
+            if (TOTAL.equalsIgnoreCase(delta.getState())) {
                 lastUpdated = delta.getLastUpdatedTime();
             }
             if (delta.getDeltaRecovered() < 1L && delta.getDeltaConfirmed() < 1L && delta.getDeltaDeaths() < 1L) {
@@ -132,9 +134,47 @@ public class StatsAlertConsumerConfig {
             dailyIncrements.add(stateStores.dailyStatsForState(delta.getState()));
         }
         if (readyToSend.isEmpty()) {
-            return;
+            return; // no useful update
         }
-        fireStatewiseTelegramAlert(covid19Bot, buildStatewiseAlertText(friendlyTime(lastUpdated), readyToSend, dailyIncrements));
+        String alertTextForAllStates = buildStatewiseAlertText(friendlyTime(lastUpdated), readyToSend, dailyIncrements);
+
+        final KeyValueIterator<String, UserPrefs> userPrefsIterator = stateStores.userPrefs();
+        userPrefsIterator.forEachRemaining(keyValue -> {
+            UserPrefs userPref = keyValue.value;
+            if (!userPref.isSubscribed()) {
+                LOG.info("Skipping user {} because unsubscribed", userPref.getUserId());
+                return;
+            }
+            if (userPref.getMyStates().isEmpty()) {
+                LOG.info("User {} has no preferred state. Sending alert...", userPref.getUserId());
+                // send alert for all states
+                sendTelegramAlert(covid19Bot, userPref.getUserId(), alertTextForAllStates, null, true);
+                return;
+            }
+
+            // user has a preferred state
+            List<StatewiseDelta> userStatesDelta = new ArrayList<>();
+            List<StatewiseDelta> userStatesDaily = new ArrayList<>();
+            String lastUpdatedUserState = deltas.get(deltas.size() - 1).getLastUpdatedTime();
+            for (StatewiseDelta delta : deltas) {
+                if (TOTAL.equalsIgnoreCase(delta.getState())) {
+                    lastUpdatedUserState = delta.getLastUpdatedTime();
+                    userStatesDelta.add(stateStores.deltaStatsForState(TOTAL));
+                    userStatesDaily.add(stateStores.dailyStatsForState(TOTAL));
+                    continue;
+                }
+                if (delta.getDeltaRecovered() < 1L && delta.getDeltaConfirmed() < 1L && delta.getDeltaDeaths() < 1L) {
+                    continue;
+                }
+                if (userPref.getMyStates().contains(delta.getState())) {
+                    // update available for user's preferred state
+                    userStatesDelta.add(stateStores.deltaStatsForState(delta.getState()));
+                    userStatesDaily.add(stateStores.dailyStatsForState(delta.getState()));
+                }
+            }
+            String alertTextForUserStates = buildStatewiseAlertText(friendlyTime(lastUpdatedUserState), userStatesDelta, userStatesDaily);
+            sendTelegramAlert(covid19Bot, userPref.getUserId(), alertTextForUserStates, null, true);
+        });
         readyToSend.clear();
     }
 

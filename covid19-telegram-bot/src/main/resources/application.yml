@@ -9,6 +9,7 @@ spring:
       client-id: "org.covid19.patient-telegram-bot-client"
       bootstrap-servers: "localhost:9092"
       cache-max-size-buffering: 0
+      state-dir: "/tmp"
     consumer:
       group-id: "org.covid19.patient-telegram-bot-consumer"
       client-id: "org.covid19.patient-telegram-bot-consumer-client"

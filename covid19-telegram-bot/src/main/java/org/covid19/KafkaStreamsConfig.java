@@ -61,7 +61,6 @@ public class KafkaStreamsConfig {
 
     @Bean
     public KTable<String, StatewiseDelta> dailyStatsTable(StreamsBuilder streamsBuilder) {
-        // used to create keyvalue store
         return streamsBuilder.table("statewise-daily-stats",
                 Materialized.<String, StatewiseDelta, KeyValueStore<Bytes, byte[]>>as(
                         Stores.persistentKeyValueStore("statewise-daily-persistent").name())
@@ -74,6 +73,14 @@ public class KafkaStreamsConfig {
                 Materialized.<String, StatewiseDelta, KeyValueStore<Bytes, byte[]>>as(
                         Stores.persistentKeyValueStore("statewise-delta-persistent").name())
                         .withKeySerde(stringSerde).withValueSerde(new StatewiseDeltaSerde()).withCachingDisabled());
+    }
+
+    @Bean
+    public KTable<String, UserPrefs> userPrefsTable(StreamsBuilder streamsBuilder) {
+        return streamsBuilder.table("user-preferences",
+                Materialized.<String, UserPrefs, KeyValueStore<Bytes, byte[]>>as(
+                        Stores.inMemoryKeyValueStore("user-preferences-inmemory").name())
+                        .withKeySerde(Serdes.String()).withValueSerde(new UserPrefsSerde()).withCachingDisabled());
     }
 
     @Bean

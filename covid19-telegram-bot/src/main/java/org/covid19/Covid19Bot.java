@@ -13,8 +13,6 @@ import org.springframework.kafka.support.ProducerListener;
 import org.telegram.abilitybots.api.bot.AbilityBot;
 import org.telegram.abilitybots.api.db.DBContext;
 import org.telegram.abilitybots.api.objects.Ability;
-import org.telegram.abilitybots.api.objects.Locality;
-import org.telegram.abilitybots.api.objects.Privacy;
 import org.telegram.abilitybots.api.objects.Reply;
 import org.telegram.abilitybots.api.objects.ReplyFlow;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
@@ -31,8 +29,10 @@ import java.util.function.Predicate;
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
 import static org.covid19.TelegramUtils.translateName;
+import static org.telegram.abilitybots.api.objects.Locality.ALL;
 import static org.telegram.abilitybots.api.objects.Locality.USER;
 import static org.telegram.abilitybots.api.objects.Privacy.CREATOR;
+import static org.telegram.abilitybots.api.objects.Privacy.PUBLIC;
 
 public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
     private static final Logger LOG = LoggerFactory.getLogger(Covid19Bot.class);
@@ -84,14 +84,32 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
         return CHAT_ID.intValue();
     }
 
+    public Ability oneTimeMigrate() {
+        return Ability
+                .builder()
+                .name("migrate").info("Migrate all subscribers to Kafka")
+                .locality(USER).privacy(CREATOR)
+                .action(msgCtx -> {
+                    List<String> subscribedUsers = db.getList(SUBSCRIBED_USERS);
+                    subscribedUsers.forEach(user -> {
+                        userPrefsKafkaTemplate.send("user-preferences", String.valueOf(user),
+                                new UserPrefs(String.valueOf(user), emptyList(), true));
+                    });
+                })
+                .post(msgCtx -> {
+                    silent.send("All users migrated to Kafka", CHANNEL_ID);
+                })
+                .build();
+    }
+
     @SuppressWarnings("unused")
     public Ability sayHelloWorld() {
         return Ability
                 .builder()
                 .name("hello")
                 .info("says hello world")
-                .locality(Locality.ALL)
-                .privacy(Privacy.PUBLIC)
+                .locality(ALL)
+                .privacy(PUBLIC)
                 .action(messageContext ->
                         silent.send("Hello world from Java bot", CHAT_ID)
                                 .ifPresent(message -> LOG.info("Returned msg id {} with username {}",
@@ -105,8 +123,8 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
                 .builder()
                 .name("start")
                 .info("Subscribe to Covid19 India patient alerts")
-                .locality(Locality.ALL)
-                .privacy(Privacy.PUBLIC)
+                .locality(ALL)
+                .privacy(PUBLIC)
                 .input(0)
                 .action(ctx -> {
                     List<String> subscribedUsers = db.getList(SUBSCRIBED_USERS);
@@ -140,8 +158,8 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
                 .builder()
                 .name("stop")
                 .info("Un-subscribe from Covid19 India patient alerts")
-                .locality(Locality.ALL)
-                .privacy(Privacy.PUBLIC)
+                .locality(ALL)
+                .privacy(PUBLIC)
                 .input(0)
                 .action(ctx -> {
                     List<String> subscribedUsers = db.getList(SUBSCRIBED_USERS);

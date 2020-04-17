@@ -121,8 +121,8 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
                     silent.send(message, ctx.chatId());
                 })
                 .post(ctx -> {
-                    String message = String.format("User %s %s with id %d (re)subscribed to Covid19 India Patient alerts",
-                            ctx.user().getFirstName(), ctx.user().getLastName(), ctx.user().getId());
+                    String message = String.format("User %s (%d) subscribed to Covid19 India Patient alerts",
+                            translateName(ctx.update().getMessage().getChat()), ctx.user().getId());
                     silent.send(message, CHANNEL_ID);
                 })
                 .build();
@@ -152,8 +152,8 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
                     silent.send(message, ctx.chatId());
                 })
                 .post(ctx -> {
-                    String message = String.format("User %s with id %d unsubscribed from Covid19 India Patient alerts",
-                            ctx.user().getUserName(), ctx.user().getId());
+                    String message = String.format("User %s (%d) unsubscribed from Covid19 India Patient alerts",
+                            translateName(ctx.update().getMessage().getChat()), ctx.user().getId());
                     silent.send(message, CHANNEL_ID);
                 })
                 .build();

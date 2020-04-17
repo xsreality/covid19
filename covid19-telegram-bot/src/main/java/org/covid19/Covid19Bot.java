@@ -29,6 +29,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
 
 import static java.util.Arrays.asList;
+import static java.util.Collections.emptyList;
 import static org.covid19.TelegramUtils.translateName;
 import static org.telegram.abilitybots.api.objects.Locality.USER;
 import static org.telegram.abilitybots.api.objects.Privacy.CREATOR;
@@ -69,7 +70,8 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
     private static Long CHAT_ID;
     private static Long CHANNEL_ID;
     private ApplicationContext appCtx;
-    private KafkaTemplate<String, UserRequest> kafkaTemplate;
+    private KafkaTemplate<String, UserRequest> userRequestKafkaTemplate;
+    private KafkaTemplate<String, UserPrefs> userPrefsKafkaTemplate;
 
     protected Covid19Bot(String botToken, String botUsername, DBContext db, String creatorId, String channelId) {
         super(botToken, botUsername, db);
@@ -115,6 +117,10 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
                         subscribedUsers.add(String.valueOf(userId));
                     }
 
+                    // send a message to kafka user-preferences
+                    userPrefsKafkaTemplate.send("user-preferences", String.valueOf(userId),
+                            new UserPrefs(String.valueOf(userId), emptyList(), true));
+
                     String message = newUser ?
                             "Congratulations! You are now subscribed to Covid19 India Patient alerts! Send /stats to get statistics. Stay safe and keep social distancing!"
                             : "You are already subscribed to Covid19 India Patient alerts! Send /stats to get statistics.";
@@ -145,6 +151,11 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
                     if (existingUser) {
                         subscribedUsers.remove(String.valueOf(userId));
                     }
+
+                    // send a message to update kafka user-preferences
+                    userPrefsKafkaTemplate.send("user-preferences", String.valueOf(userId),
+                            new UserPrefs(String.valueOf(userId), emptyList(), false));
+
 
                     String message = existingUser ?
                             "You have been unsubscribed from Covid19 India Patient alerts. Avoid information overload. Stay safe and keep social distancing!"
@@ -237,8 +248,8 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
     public void setApplicationContext(@NotNull ApplicationContext applicationContext) throws BeansException {
         this.appCtx = applicationContext;
         //noinspection unchecked
-        kafkaTemplate = (KafkaTemplate<String, UserRequest>) appCtx.getBean("kafkaTemplate");
-        kafkaTemplate.setProducerListener(new ProducerListener<String, UserRequest>() {
+        userRequestKafkaTemplate = (KafkaTemplate<String, UserRequest>) appCtx.getBean("userRequestKafkaTemplate");
+        userRequestKafkaTemplate.setProducerListener(new ProducerListener<String, UserRequest>() {
             @Override
             public void onSuccess(ProducerRecord<String, UserRequest> producerRecord, RecordMetadata recordMetadata) {
                 LOG.info("Successfully produced user request for chatId {}, request {}", producerRecord.key(), producerRecord.value());
@@ -246,6 +257,20 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
 
             @Override
             public void onError(ProducerRecord<String, UserRequest> producerRecord, Exception exception) {
+                LOG.error("Error producing record {}", producerRecord, exception);
+            }
+        });
+
+        //noinspection unchecked
+        userPrefsKafkaTemplate = (KafkaTemplate<String, UserPrefs>) appCtx.getBean("userPrefsKafkaTemplate");
+        userPrefsKafkaTemplate.setProducerListener(new ProducerListener<String, UserPrefs>() {
+            @Override
+            public void onSuccess(ProducerRecord<String, UserPrefs> producerRecord, RecordMetadata recordMetadata) {
+                LOG.info("Successfully produced user request for chatId {}, request {}", producerRecord.key(), producerRecord.value());
+            }
+
+            @Override
+            public void onError(ProducerRecord<String, UserPrefs> producerRecord, Exception exception) {
                 LOG.error("Error producing record {}", producerRecord, exception);
             }
         });
@@ -329,7 +354,7 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
             String chatId = String.valueOf(upd.getCallbackQuery().getMessage().getChatId());
             String state = upd.getCallbackQuery().getData();
 
-            kafkaTemplate.send("user-request", getChatId(upd), new UserRequest(chatId, state));
+            userRequestKafkaTemplate.send("user-request", getChatId(upd), new UserRequest(chatId, state));
 
             EditMessageText msg = new EditMessageText();
             msg.setChatId(upd.getCallbackQuery().getMessage().getChatId());

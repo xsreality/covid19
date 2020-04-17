@@ -2,20 +2,13 @@ package org.covid19;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.streams.KafkaStreams;
-import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.state.KeyValueIterator;
-import org.apache.kafka.streams.state.QueryableStoreTypes;
-import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
-import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.autoconfigure.kafka.KafkaProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.annotation.EnableKafka;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
-import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
-import org.springframework.kafka.config.StreamsBuilderFactoryBean;
 import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
 import org.springframework.messaging.handler.annotation.Payload;
@@ -26,8 +19,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import lombok.extern.slf4j.Slf4j;
@@ -53,14 +44,12 @@ public class StatsAlertConsumerConfig {
     private final KafkaProperties kafkaProperties;
     private final Serde<String> stringSerde;
     private final Covid19Bot covid19Bot;
-    private ReadOnlyKeyValueStore<String, StatewiseDelta> dailyStatsStore;
-    private ReadOnlyKeyValueStore<String, StatewiseDelta> deltaStatsStore;
-    private KafkaListenerEndpointRegistry registry;
+    private final StateStoresManager stateStores;
 
-    public StatsAlertConsumerConfig(KafkaProperties kafkaProperties, Covid19Bot covid19Bot, KafkaListenerEndpointRegistry registry) {
+    public StatsAlertConsumerConfig(KafkaProperties kafkaProperties, Covid19Bot covid19Bot, StateStoresManager stateStores) {
         this.kafkaProperties = kafkaProperties;
         this.covid19Bot = covid19Bot;
-        this.registry = registry;
+        this.stateStores = stateStores;
         this.stringSerde = Serdes.String();
     }
 
@@ -114,31 +103,6 @@ public class StatsAlertConsumerConfig {
     }
 
 
-    @Bean
-    public CountDownLatch latch(StreamsBuilderFactoryBean fb) {
-        CountDownLatch latch = new CountDownLatch(1);
-        fb.setStateListener((newState, oldState) -> {
-            if (KafkaStreams.State.RUNNING.equals(newState)) {
-                latch.countDown();
-            }
-        });
-        return latch;
-    }
-
-    @Bean
-    public ApplicationRunner runner(StreamsBuilderFactoryBean fb,
-                                    KTable<String, StatewiseDelta> dailyStatsTable,
-                                    KTable<String, StatewiseDelta> deltaStatsTable) {
-        return args -> {
-            latch(fb).await(100, TimeUnit.SECONDS);
-            dailyStatsStore = fb.getKafkaStreams().store(dailyStatsTable.queryableStoreName(), QueryableStoreTypes.keyValueStore());
-            deltaStatsStore = fb.getKafkaStreams().store(deltaStatsTable.queryableStoreName(), QueryableStoreTypes.keyValueStore());
-            // start consumers only after state store is ready.
-            registry.getListenerContainer("statewiseAlertsConsumer").start();
-            registry.getListenerContainer("userRequestsConsumer").start();
-        };
-    }
-
     @KafkaListener(topics = "statewise-delta-stats", id = "statewiseAlertsConsumer",
             idIsGroup = false, autoStartup = "false",
             containerFactory = "statewiseAlertsKafkaListenerContainerFactory")
@@ -165,7 +129,7 @@ public class StatsAlertConsumerConfig {
                 continue;
             }
             readyToSend.add(delta);
-            dailyIncrements.add(dailyStatsStore.get(delta.getState()));
+            dailyIncrements.add(stateStores.dailyStatsForState(delta.getState()));
         }
         if (readyToSend.isEmpty()) {
             return;
@@ -182,8 +146,8 @@ public class StatsAlertConsumerConfig {
             sendTelegramAlert(covid19Bot, request.getChatId(), buildStateSummary(), null, true);
             return;
         }
-        StatewiseDelta delta = deltaStatsStore.get(request.getState());
-        StatewiseDelta daily = dailyStatsStore.get(request.getState());
+        StatewiseDelta delta = stateStores.deltaStatsForState(request.getState());
+        StatewiseDelta daily = stateStores.dailyStatsForState(request.getState());
         AtomicReference<String> alertText = new AtomicReference<>("");
         buildSummaryAlertBlock(alertText, singletonList(delta), singletonList(daily));
         sendTelegramAlert(covid19Bot, request.getChatId(), alertText.get(), null, true);
@@ -198,7 +162,7 @@ public class StatsAlertConsumerConfig {
     }
 
     private String buildStateSummary() {
-        final KeyValueIterator<String, StatewiseDelta> stats = dailyStatsStore.all();
+        final KeyValueIterator<String, StatewiseDelta> stats = stateStores.dailyStats();
 
         List<StatewiseDelta> sortedStats = new ArrayList<>();
         StatewiseDelta total = new StatewiseDelta();

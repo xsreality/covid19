@@ -23,7 +23,7 @@ public class UserRequestProducer {
     }
 
     @Bean
-    public Map<String, Object> producerConfigs() {
+    public Map<String, Object> userRequestProducerConfigs() {
         Map<String, Object> props = new HashMap<>(kafkaProperties.buildProducerProperties());
 
         props.put(org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, stringSerde.serializer().getClass().getName());
@@ -33,13 +33,12 @@ public class UserRequestProducer {
     }
 
     @Bean
-    public ProducerFactory<String, UserRequest> producerFactory() {
-        return new DefaultKafkaProducerFactory<>(producerConfigs());
+    public ProducerFactory<String, UserRequest> userRequestProducerFactory() {
+        return new DefaultKafkaProducerFactory<>(userRequestProducerConfigs());
     }
 
     @Bean
-    public KafkaTemplate<String, UserRequest> kafkaTemplate() {
-        return new KafkaTemplate<>(producerFactory());
+    public KafkaTemplate<String, UserRequest> userRequestKafkaTemplate() {
+        return new KafkaTemplate<>(userRequestProducerFactory());
     }
-
 }

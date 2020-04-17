@@ -1,9 +1,11 @@
 package org.covid19;
 
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
+import org.telegram.telegrambots.meta.api.objects.Chat;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
 import lombok.extern.slf4j.Slf4j;
@@ -11,10 +13,18 @@ import lombok.extern.slf4j.Slf4j;
 import static com.google.common.base.Strings.isNullOrEmpty;
 import static java.util.Objects.isNull;
 import static java.util.Objects.nonNull;
+import static org.covid19.Utils.friendlyTime;
+import static org.covid19.Utils.initStateCodes;
 import static org.covid19.Utils.zip;
 
 @Slf4j
 public class TelegramUtils {
+    final static Map<String, String> stateCodes;
+
+    static {
+        stateCodes = initStateCodes();
+    }
+
     static String buildAlertText(boolean update, PatientAndMessage patientAndMessage) {
         PatientInfo patientInfo = patientAndMessage.getPatientInfo();
         String alertText;
@@ -164,5 +174,39 @@ public class TelegramUtils {
                     delta.getState()));
         }
         updateText.accumulateAndGet(textLine, (current, update) -> current + update);
+    }
+
+    static String buildStateSummaryAlertText(List<StatewiseDelta> sortedStats, StatewiseDelta total, String lastUpdated) {
+        String text = String.format("<i>%s</i>\n\n", friendlyTime(lastUpdated));
+        text = text.concat("Summary of all affected Indian States\n\n");
+        text = text.concat("<pre>\n");
+        text = text.concat("State|  Conf|  Rec.| Died\n");
+        text = text.concat("-------------------------\n");
+        for (StatewiseDelta stat : sortedStats) {
+            if ("Total".equalsIgnoreCase(stat.getState())) {
+                total = stat;
+                continue; // show total at the end
+            }
+            if (stat.getCurrentConfirmed() < 1L && stat.getCurrentRecovered() < 1L && stat.getCurrentDeaths() < 1L) {
+                continue; // skip states with zero stats
+            }
+            text = text.concat(String.format("%-5s|%6s|%6s|%5s\n", stateCodes.get(stat.getState()), stat.getCurrentConfirmed(), stat.getCurrentRecovered(), stat.getCurrentDeaths()));
+        }
+        text = text.concat("-------------------------\n");
+        text = text.concat(String.format("%-5s|%6s|%6s|%5s\n", stateCodes.get(total.getState()), total.getCurrentConfirmed(), total.getCurrentRecovered(), total.getCurrentDeaths()));
+        text = text.concat("</pre>");
+        return text;
+    }
+
+    static String translateName(Chat chat) {
+        if (nonNull(chat.getFirstName())) {
+            if (nonNull(chat.getLastName())) {
+                return chat.getFirstName() + " " + chat.getLastName();
+            }
+            return chat.getFirstName();
+        } else if (nonNull(chat.getUserName())) {
+            return chat.getUserName();
+        }
+        return "";
     }
 }

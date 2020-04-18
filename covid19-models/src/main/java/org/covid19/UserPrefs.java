@@ -20,5 +20,5 @@ public class UserPrefs {
     // out of dirty log). While this setting can be modified it is still not guaranteed
     // how soon message will be removed. To avoid annoying the user by sending alerts
     // after they have unsubscribed, we instead toggle this boolean flag
-    private boolean isSubscribed;
+    private boolean subscribed;
 }

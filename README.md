@@ -31,7 +31,32 @@ if the update is significant. Currently this means either changes in status or n
 
 ![Kafka Streams Architecture](https://i.ibb.co/r2zJFL2/Covid19-India-Alerts-2.png "Covid19 Kafka Streams Architecture")
 
-## On-demand Statistics - Telegram command `/stats`
+## Telegram Commands
+
+### `/mystate` - Set preferred state
+
+Not interested in updates of all Indian states? Then you can use the command `/mystate` to set your
+_preferred_ state. Once set, you will receive updates of that state only including cumulative totals
+across India. You will continue to receive summary updates every 4 hours.
+
+### `/clearmystate` - Remove preferred state
+
+If you have set preferred state and would like to start receiving updates for _every_ state, then
+send the command `/clearmystate` to clear your preferred state.
+
+### `/getmystate` - Get currently preferred state
+
+At any time, you want to check what preferred state is set if any, then send the command `/getmystate`.
+
+### `/start` - Subscribe to automatic real-time updates
+
+Get real-time updates of all Indian States
+
+### `/stop` - Unsubscribe from updates
+
+Stop receiving updates.
+
+### `/stats` - On-demand Statistics
 
 To get the current statistics of any Indian State or Total, send the command `/stats`.
 
@@ -47,3 +72,7 @@ a region, next screen will pop-up asking to choose a state within the region.
 You should get back the cumulative statistics of the chosen state at that point of time.
 
 ![Telegram command /stats state summary](https://i.ibb.co/Y2m1Rhk/Screenshot-20200413-184246.jpg "Telegram command /stats state summary")
+
+### Python Importer
+
+The Python script that imports the Covid19India API is available here: https://github.com/xsreality/covid19-patient-importer 

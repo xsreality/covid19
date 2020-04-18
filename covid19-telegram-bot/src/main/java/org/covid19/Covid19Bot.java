@@ -13,8 +13,6 @@ import org.springframework.kafka.support.ProducerListener;
 import org.telegram.abilitybots.api.bot.AbilityBot;
 import org.telegram.abilitybots.api.db.DBContext;
 import org.telegram.abilitybots.api.objects.Ability;
-import org.telegram.abilitybots.api.objects.Locality;
-import org.telegram.abilitybots.api.objects.Privacy;
 import org.telegram.abilitybots.api.objects.Reply;
 import org.telegram.abilitybots.api.objects.ReplyFlow;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
@@ -29,17 +27,22 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
 
 import static java.util.Arrays.asList;
+import static java.util.Collections.emptyList;
+import static java.util.Collections.singletonList;
 import static org.covid19.TelegramUtils.translateName;
+import static org.telegram.abilitybots.api.objects.Locality.ALL;
 import static org.telegram.abilitybots.api.objects.Locality.USER;
 import static org.telegram.abilitybots.api.objects.Privacy.CREATOR;
+import static org.telegram.abilitybots.api.objects.Privacy.PUBLIC;
 
+@SuppressWarnings("unused")
 public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
     private static final Logger LOG = LoggerFactory.getLogger(Covid19Bot.class);
 
     private static final String SUBSCRIBED_USERS = "SUBSCRIBED_USERS";
 
     private static final String[] NORTH_INDIAN_STATES = {
-            "Delhi", "Jammu & Kashmir", "Himachal Pradesh", "Chandigarh",
+            "Delhi", "Jammu and Kashmir", "Himachal Pradesh", "Chandigarh",
             "Haryana", "Punjab", "Rajasthan", "Ladakh"
     };
 
@@ -69,7 +72,9 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
     private static Long CHAT_ID;
     private static Long CHANNEL_ID;
     private ApplicationContext appCtx;
-    private KafkaTemplate<String, UserRequest> kafkaTemplate;
+    private KafkaTemplate<String, UserRequest> userRequestKafkaTemplate;
+    private KafkaTemplate<String, UserPrefs> userPrefsKafkaTemplate;
+    private StateStoresManager storesManager;
 
     protected Covid19Bot(String botToken, String botUsername, DBContext db, String creatorId, String channelId) {
         super(botToken, botUsername, db);
@@ -82,14 +87,32 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
         return CHAT_ID.intValue();
     }
 
+    public Ability oneTimeMigrate() {
+        return Ability
+                .builder()
+                .name("migrate").info("Migrate all subscribers to Kafka")
+                .locality(USER).privacy(CREATOR)
+                .action(msgCtx -> {
+                    List<String> subscribedUsers = db.getList(SUBSCRIBED_USERS);
+                    subscribedUsers.forEach(user -> {
+                        userPrefsKafkaTemplate.send("user-preferences", String.valueOf(user),
+                                new UserPrefs(String.valueOf(user), emptyList(), true));
+                    });
+                })
+                .post(msgCtx -> {
+                    silent.send("All users migrated to Kafka", CHANNEL_ID);
+                })
+                .build();
+    }
+
     @SuppressWarnings("unused")
     public Ability sayHelloWorld() {
         return Ability
                 .builder()
                 .name("hello")
                 .info("says hello world")
-                .locality(Locality.ALL)
-                .privacy(Privacy.PUBLIC)
+                .locality(ALL)
+                .privacy(PUBLIC)
                 .action(messageContext ->
                         silent.send("Hello world from Java bot", CHAT_ID)
                                 .ifPresent(message -> LOG.info("Returned msg id {} with username {}",
@@ -103,8 +126,8 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
                 .builder()
                 .name("start")
                 .info("Subscribe to Covid19 India patient alerts")
-                .locality(Locality.ALL)
-                .privacy(Privacy.PUBLIC)
+                .locality(ALL)
+                .privacy(PUBLIC)
                 .input(0)
                 .action(ctx -> {
                     List<String> subscribedUsers = db.getList(SUBSCRIBED_USERS);
@@ -114,6 +137,10 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
                     if (newUser) {
                         subscribedUsers.add(String.valueOf(userId));
                     }
+
+                    // send a message to kafka user-preferences
+                    userPrefsKafkaTemplate.send("user-preferences", String.valueOf(userId),
+                            new UserPrefs(String.valueOf(userId), emptyList(), true));
 
                     String message = newUser ?
                             "Congratulations! You are now subscribed to Covid19 India Patient alerts! Send /stats to get statistics. Stay safe and keep social distancing!"
@@ -134,8 +161,8 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
                 .builder()
                 .name("stop")
                 .info("Un-subscribe from Covid19 India patient alerts")
-                .locality(Locality.ALL)
-                .privacy(Privacy.PUBLIC)
+                .locality(ALL)
+                .privacy(PUBLIC)
                 .input(0)
                 .action(ctx -> {
                     List<String> subscribedUsers = db.getList(SUBSCRIBED_USERS);
@@ -145,6 +172,11 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
                     if (existingUser) {
                         subscribedUsers.remove(String.valueOf(userId));
                     }
+
+                    // send a message to update kafka user-preferences
+                    userPrefsKafkaTemplate.send("user-preferences", String.valueOf(userId),
+                            new UserPrefs(String.valueOf(userId), emptyList(), false));
+
 
                     String message = existingUser ?
                             "You have been unsubscribed from Covid19 India Patient alerts. Avoid information overload. Stay safe and keep social distancing!"
@@ -176,7 +208,6 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
                 .build();
     }
 
-    @SuppressWarnings("unused")
     public Ability manuallyAdd() {
         return Ability
                 .builder().name("add").info("Manually subscribe a user to Covid19 India patient alerts")
@@ -195,7 +226,6 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
                 .build();
     }
 
-    @SuppressWarnings("unused")
     public Ability manuallyRemove() {
         return Ability
                 .builder().name("remove").info("Manually unsubscribe a user to Covid19 India patient alerts")
@@ -214,7 +244,6 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
                 .build();
     }
 
-    @SuppressWarnings("unused")
     public Ability listSubscribedUsers() {
         return Ability
                 .builder().name("list").info("List all subscribed users of Covid19 India patient alerts")
@@ -236,9 +265,12 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
     @Override
     public void setApplicationContext(@NotNull ApplicationContext applicationContext) throws BeansException {
         this.appCtx = applicationContext;
+
+        this.storesManager = (StateStoresManager) appCtx.getBean("stateStoresManager");
+
         //noinspection unchecked
-        kafkaTemplate = (KafkaTemplate<String, UserRequest>) appCtx.getBean("kafkaTemplate");
-        kafkaTemplate.setProducerListener(new ProducerListener<String, UserRequest>() {
+        userRequestKafkaTemplate = (KafkaTemplate<String, UserRequest>) appCtx.getBean("userRequestKafkaTemplate");
+        userRequestKafkaTemplate.setProducerListener(new ProducerListener<String, UserRequest>() {
             @Override
             public void onSuccess(ProducerRecord<String, UserRequest> producerRecord, RecordMetadata recordMetadata) {
                 LOG.info("Successfully produced user request for chatId {}, request {}", producerRecord.key(), producerRecord.value());
@@ -249,10 +281,139 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
                 LOG.error("Error producing record {}", producerRecord, exception);
             }
         });
+
+        //noinspection unchecked
+        userPrefsKafkaTemplate = (KafkaTemplate<String, UserPrefs>) appCtx.getBean("userPrefsKafkaTemplate");
+        userPrefsKafkaTemplate.setProducerListener(new ProducerListener<String, UserPrefs>() {
+            @Override
+            public void onSuccess(ProducerRecord<String, UserPrefs> producerRecord, RecordMetadata recordMetadata) {
+                LOG.info("Successfully produced user request for chatId {}, request {}", producerRecord.key(), producerRecord.value());
+            }
+
+            @Override
+            public void onError(ProducerRecord<String, UserPrefs> producerRecord, Exception exception) {
+                LOG.error("Error producing record {}", producerRecord, exception);
+            }
+        });
     }
 
-    @SuppressWarnings("unused")
-    public ReplyFlow stateSelectionFlow() {
+    public Ability clearMyState() {
+        return Ability.builder()
+                .name("clearmystate").info("Clear preferred state (if set). You will receive updates for every Indian state.")
+                .locality(ALL).privacy(PUBLIC).input(0)
+                .action(ctx -> {
+                    String chatId = String.valueOf(ctx.chatId());
+                    UserPrefs prefs = storesManager.prefsForUser(chatId);
+
+                    String message = "";
+                    if (prefs.getMyStates().isEmpty()) {
+                        message = "You do not have any preferred state set. Send /mystate to choose a preferred state.";
+                    } else {
+                        userPrefsKafkaTemplate.send("user-preferences", chatId, new UserPrefs(chatId, emptyList(), true));
+                        String currentState = prefs.getMyStates().get(0);
+                        message = String.format("Your preferred state (%s) has been removed. You will start receiving updates of all Indian states.", currentState);
+                    }
+                    silent.send(message, ctx.chatId());
+                })
+                .post(ctx -> {
+                    // send update to bot channel
+                    String message = String.format("User %s (%d) reset their preferred state.",
+                            translateName(ctx.update().getMessage().getChat()), ctx.chatId());
+                    silent.send(message, CHANNEL_ID);
+                })
+                .build();
+    }
+
+    public Ability getMyState() {
+        return Ability.builder()
+                .name("getmystate").info("Get my preferred state")
+                .locality(ALL).privacy(PUBLIC).input(0)
+                .action(ctx -> {
+                    String chatId = String.valueOf(ctx.chatId());
+                    UserPrefs prefs = storesManager.prefsForUser(chatId);
+
+                    String message = "";
+                    if (prefs.getMyStates().isEmpty()) {
+                        message = "You do not have any preferred state set. Send /mystate to choose a preferred state.";
+                    } else {
+                        message = String.format("Your preferred state is %s.\n\n" +
+                                "To clear your preferred state and receive updates of all states, send /clearmystate", prefs.getMyStates().get(0));
+                    }
+                    silent.send(message, ctx.chatId());
+                }).build();
+    }
+
+    public ReplyFlow myStateFlow() {
+        final ReplyFlow northIndiaFlow = ReplyFlow.builder(db, 11)
+                .action(upd -> {
+                    EditMessageText msg = buildNorthIndianStatesKeyboard(upd);
+                    silent.execute(msg);
+                })
+                .onlyIf(isCallbackOrMessage("North India"))
+                .next(sendUserPrefsToKafka(isAnyState()))
+                .build();
+
+        final ReplyFlow centralIndiaFlow = ReplyFlow.builder(db, 12)
+                .action(upd -> {
+                    EditMessageText msg = buildCentralIndianStatesKeyboard(upd);
+                    silent.execute(msg);
+                })
+                .onlyIf(isCallbackOrMessage("Central India"))
+                .next(sendUserPrefsToKafka(isAnyState()))
+                .build();
+
+        final ReplyFlow eastIndiaFlow = ReplyFlow.builder(db, 13)
+                .action(upd -> {
+                    EditMessageText msg = buildEastIndianStatesKeyboard(upd);
+                    silent.execute(msg);
+                })
+                .onlyIf(isCallbackOrMessage("East India"))
+                .next(sendUserPrefsToKafka(isAnyState()))
+                .build();
+
+        final ReplyFlow northEastIndiaFlow = ReplyFlow.builder(db, 14)
+                .action(upd -> {
+                    EditMessageText msg = buildNorthEastIndianStatesKeyboard(upd);
+                    silent.execute(msg);
+                })
+                .onlyIf(isCallbackOrMessage("North East India"))
+                .next(sendUserPrefsToKafka(isAnyState()))
+                .build();
+
+        final ReplyFlow westIndiaFlow = ReplyFlow.builder(db, 15)
+                .action(upd -> {
+                    EditMessageText msg = buildWestIndianStatesKeyboard(upd);
+                    silent.execute(msg);
+                })
+                .onlyIf(isCallbackOrMessage("West India"))
+                .next(sendUserPrefsToKafka(isAnyState()))
+                .build();
+
+        final ReplyFlow southIndiaFlow = ReplyFlow.builder(db, 16)
+                .action(upd -> {
+                    EditMessageText msg = buildSouthIndianStatesKeyboard(upd);
+                    silent.execute(msg);
+                })
+                .onlyIf(isCallbackOrMessage("South India"))
+                .next(sendUserPrefsToKafka(isAnyState()))
+                .build();
+
+        return ReplyFlow.builder(db, 10)
+                .action(update -> {
+                    SendMessage msg = buildRegionKeyboard(getChatId(update), false);
+                    silent.execute(msg);
+                })
+                .onlyIf(isCallbackOrMessage("/mystate"))
+                .next(northIndiaFlow)
+                .next(centralIndiaFlow)
+                .next(eastIndiaFlow)
+                .next(northEastIndiaFlow)
+                .next(westIndiaFlow)
+                .next(southIndiaFlow)
+                .build();
+    }
+
+    public ReplyFlow requestAnyStateFlow() {
         final ReplyFlow northIndiaFlow = ReplyFlow.builder(db, 2)
                 .action(upd -> {
                     EditMessageText msg = buildNorthIndianStatesKeyboard(upd);
@@ -309,7 +470,7 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
 
         return ReplyFlow.builder(db, 1)
                 .action(update -> {
-                    SendMessage msg = buildRegionKeyboard(getChatId(update));
+                    SendMessage msg = buildRegionKeyboard(getChatId(update), true);
                     silent.execute(msg);
                 })
                 .onlyIf(isCallbackOrMessage("/stats"))
@@ -329,7 +490,7 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
             String chatId = String.valueOf(upd.getCallbackQuery().getMessage().getChatId());
             String state = upd.getCallbackQuery().getData();
 
-            kafkaTemplate.send("user-request", getChatId(upd), new UserRequest(chatId, state));
+            userRequestKafkaTemplate.send("user-request", getChatId(upd), new UserRequest(chatId, state));
 
             EditMessageText msg = new EditMessageText();
             msg.setChatId(upd.getCallbackQuery().getMessage().getChatId());
@@ -338,8 +499,30 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
             silent.execute(msg);
 
             // send an update to Bot channel
-            String channelMsg = String.format("User %s (%s) requested stats for %s", chatId, translateName(upd.getCallbackQuery().getMessage().getChat()), state);
+            String channelMsg = String.format("User %s (%s) requested stats for %s", translateName(upd.getCallbackQuery().getMessage().getChat()), chatId, state);
             silent.send(channelMsg, CHANNEL_ID);
+        }, predicate);
+    }
+
+    private Reply sendUserPrefsToKafka(Predicate<Update> predicate) {
+        return Reply.of(upd -> {
+            String chatId = String.valueOf(upd.getCallbackQuery().getMessage().getChatId());
+            String state = upd.getCallbackQuery().getData();
+
+            userPrefsKafkaTemplate.send("user-preferences", getChatId(upd), new UserPrefs(chatId, singletonList(state), true));
+
+            EditMessageText msg = new EditMessageText();
+            msg.setChatId(upd.getCallbackQuery().getMessage().getChatId());
+            msg.setMessageId(upd.getCallbackQuery().getMessage().getMessageId());
+            msg.setText(String.format("Your preferred state is set to %s. " +
+                    "You will receive updates about %s only. " +
+                    "To cancel this, send /clearmystate", state, state));
+            silent.execute(msg);
+
+            // send an update to Bot channel
+            String channelMsg = String.format("User %s (%s) set preferred state to %s", translateName(upd.getCallbackQuery().getMessage().getChat()), chatId, state);
+            silent.send(channelMsg, CHANNEL_ID);
+
         }, predicate);
     }
 
@@ -367,7 +550,7 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
     }
 
     @NotNull
-    private SendMessage buildRegionKeyboard(String chatId) {
+    private SendMessage buildRegionKeyboard(String chatId, boolean showTotalSummary) {
         InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
         SendMessage msg = new SendMessage();
         msg.setChatId(chatId);
@@ -388,10 +571,12 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
         row.add(new InlineKeyboardButton().setText("South India").setCallbackData("South India"));
         keyboard.add(row);
 
-        row = new ArrayList<>();
-        row.add(new InlineKeyboardButton().setText("Total").setCallbackData("Total"));
-        row.add(new InlineKeyboardButton().setText("Summary").setCallbackData("Summary"));
-        keyboard.add(row);
+        if (showTotalSummary) {
+            row = new ArrayList<>();
+            row.add(new InlineKeyboardButton().setText("Total").setCallbackData("Total"));
+            row.add(new InlineKeyboardButton().setText("Summary").setCallbackData("Summary"));
+            keyboard.add(row);
+        }
 
         markup.setKeyboard(keyboard);
         msg.setReplyMarkup(markup);
@@ -407,7 +592,7 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
         List<List<InlineKeyboardButton>> keyboard = new ArrayList<>();
         List<InlineKeyboardButton> row = new ArrayList<>();
         row.add(new InlineKeyboardButton("Delhi").setCallbackData("Delhi"));
-        row.add(new InlineKeyboardButton("Jammu & Kashmir").setCallbackData("Jammu & Kashmir"));
+        row.add(new InlineKeyboardButton("Jammu and Kashmir").setCallbackData("Jammu and Kashmir"));
         keyboard.add(row);
 
         row = new ArrayList<>();

@@ -75,4 +75,8 @@ public class StateStoresManager {
     public StatewiseDelta deltaStatsForState(String state) {
         return deltaStatsStore.get(state);
     }
+
+    public UserPrefs prefsForUser(String userId) {
+        return userPrefsStore.get(userId);
+    }
 }

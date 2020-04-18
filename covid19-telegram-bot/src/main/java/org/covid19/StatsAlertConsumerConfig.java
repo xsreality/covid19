@@ -156,6 +156,7 @@ public class StatsAlertConsumerConfig {
             List<StatewiseDelta> userStatesDelta = new ArrayList<>();
             List<StatewiseDelta> userStatesDaily = new ArrayList<>();
             String lastUpdatedUserState = deltas.get(deltas.size() - 1).getLastUpdatedTime();
+            boolean userHasRelevantUpdate = false;
             for (StatewiseDelta delta : deltas) {
                 if (TOTAL.equalsIgnoreCase(delta.getState())) {
                     lastUpdatedUserState = delta.getLastUpdatedTime();
@@ -168,14 +169,19 @@ public class StatsAlertConsumerConfig {
                 }
                 if (userPref.getMyStates().contains(delta.getState())) {
                     // update available for user's preferred state
+                    userHasRelevantUpdate = true;
                     userStatesDelta.add(stateStores.deltaStatsForState(delta.getState()));
                     userStatesDaily.add(stateStores.dailyStatsForState(delta.getState()));
                 }
             }
+            if (!userHasRelevantUpdate) {
+                LOG.info("Update not relevant for user {}", userPref.getUserId());
+                return; // no useful update for this user
+            }
+            LOG.info("Update is relevant for user {}", userPref.getUserId());
             String alertTextForUserStates = buildStatewiseAlertText(friendlyTime(lastUpdatedUserState), userStatesDelta, userStatesDaily);
             sendTelegramAlert(covid19Bot, userPref.getUserId(), alertTextForUserStates, null, true);
         });
-        readyToSend.clear();
     }
 
     @KafkaListener(topics = "user-request", id = "userRequestsConsumer",

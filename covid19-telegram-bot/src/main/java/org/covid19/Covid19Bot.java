@@ -143,8 +143,8 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
                             new UserPrefs(String.valueOf(userId), emptyList(), true));
 
                     String message = newUser ?
-                            "Congratulations! You are now subscribed to Covid19 India Patient alerts! Send /stats to get statistics. Stay safe and keep social distancing!"
-                            : "You are already subscribed to Covid19 India Patient alerts! Send /stats to get statistics.";
+                            "Congratulations! You are now subscribed to Covid19 India Patient alerts!\n\nChoose your preferred state with /mystate\n\nSend /stats to get statistics.\n\nStay safe and keep social distancing!"
+                            : "You are already subscribed to Covid19 India Patient alerts!\n\nChoose your preferred state with /mystate\n\nSend /stats to get statistics.";
                     silent.send(message, ctx.chatId());
                 })
                 .post(ctx -> {

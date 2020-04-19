@@ -11,6 +11,7 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
 import org.springframework.boot.autoconfigure.kafka.KafkaProperties;
@@ -21,7 +22,6 @@ import org.springframework.kafka.annotation.KafkaStreamsDefaultConfiguration;
 import org.springframework.kafka.config.KafkaStreamsConfiguration;
 
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 import lombok.extern.slf4j.Slf4j;
@@ -39,10 +39,12 @@ public class KafkaStreamsConfig {
     private Covid19Bot covid19Bot;
     private Serde<String> stringSerde;
     private Serde<PatientAndMessage> patientAndMessageSerde;
+    private StateStoresManager storesManager;
 
-    public KafkaStreamsConfig(KafkaProperties kafkaProperties, Covid19Bot covid19Bot) {
+    public KafkaStreamsConfig(KafkaProperties kafkaProperties, Covid19Bot covid19Bot, StateStoresManager storesManager) {
         this.kafkaProperties = kafkaProperties;
         this.covid19Bot = covid19Bot;
+        this.storesManager = storesManager;
         stringSerde = Serdes.String();
         patientAndMessageSerde = new PatientAndMessageSerde();
     }
@@ -51,11 +53,9 @@ public class KafkaStreamsConfig {
     public KafkaStreamsConfiguration kStreamsConfig() {
         Map<String, Object> kafkaStreamsProps = new HashMap<>(kafkaProperties.buildStreamsProperties());
         kafkaStreamsProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        kafkaStreamsProps.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 3);
-//        kafkaStreamsProps.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
+        kafkaStreamsProps.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 4);
         kafkaStreamsProps.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 10 * 1000);
         kafkaStreamsProps.put(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.OPTIMIZE);
-//        kafkaStreamsProps.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, WallclockTimestampExtractor.class.getName());
         return new KafkaStreamsConfiguration(kafkaStreamsProps);
     }
 
@@ -97,11 +97,23 @@ public class KafkaStreamsConfig {
                     if (isNull(patientAndMessage.getPatientInfo())) {
                         return null;
                     }
-                    final List<String> subscribedUsers = covid19Bot.subscribedUsers();
                     String alertText = buildAlertText(false, patientAndMessage);
-                    subscribedUsers.forEach(userId -> {
-                        LOG.info("Sending telegram alert to {} of patient #{}", userId, patientNumber);
-                        sendTelegramAlert(covid19Bot, userId, alertText, null, false);
+                    final KeyValueIterator<String, UserPrefs> userPrefsIterator = storesManager.userPrefs();
+                    userPrefsIterator.forEachRemaining(keyValue -> {
+                        UserPrefs prefs = keyValue.value;
+                        if (prefs.getMyStates().isEmpty()) {
+                            // don't send updates to users who haven't set a preferred state.
+                            LOG.info("Skipping update of patient #{} to {} no preferred state found", patientNumber, prefs.getUserId());
+                            return;
+                        }
+                        String patientState = patientAndMessage.getPatientInfo().getDetectedState();
+                        if (prefs.getMyStates().contains(patientState)) {
+                            // patient update matches user's preferred state
+                            LOG.info("Sending telegram alert to {} of patient #{}", prefs.getUserId(), patientNumber);
+                            sendTelegramAlert(covid19Bot, prefs.getUserId(), alertText, null, true);
+                            return;
+                        }
+                        LOG.info("Update of patient #{} not relevant to {}", patientNumber, prefs.getUserId());
                     });
                     return PatientAndMessage.builder().message(null).patientInfo(patientAndMessage.getPatientInfo()).build();
                 })

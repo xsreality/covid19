@@ -30,6 +30,7 @@ import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;
 import static org.covid19.TelegramUtils.translateName;
+import static org.telegram.abilitybots.api.objects.Flag.MESSAGE;
 import static org.telegram.abilitybots.api.objects.Locality.ALL;
 import static org.telegram.abilitybots.api.objects.Locality.USER;
 import static org.telegram.abilitybots.api.objects.Privacy.CREATOR;
@@ -87,36 +88,18 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
         return CHAT_ID.intValue();
     }
 
-    public Ability oneTimeMigrate() {
+    public Ability catchAll() {
         return Ability
                 .builder()
-                .name("migrate").info("Migrate all subscribers to Kafka")
-                .locality(USER).privacy(CREATOR)
-                .action(msgCtx -> {
-                    List<String> subscribedUsers = db.getList(SUBSCRIBED_USERS);
-                    subscribedUsers.forEach(user -> {
-                        userPrefsKafkaTemplate.send("user-preferences", String.valueOf(user),
-                                new UserPrefs(String.valueOf(user), emptyList(), true));
-                    });
+                .name(DEFAULT)
+                .flag(MESSAGE)
+                .privacy(PUBLIC).locality(ALL)
+                .input(0)
+                .action(ctx -> {
+                    String msg = "Send /stats to get latest count of any State or Total\n\n" +
+                            "Send /mystate to choose your preferred state and receive updates automatically.";
+                    silent.send(msg, ctx.chatId());
                 })
-                .post(msgCtx -> {
-                    silent.send("All users migrated to Kafka", CHANNEL_ID);
-                })
-                .build();
-    }
-
-    @SuppressWarnings("unused")
-    public Ability sayHelloWorld() {
-        return Ability
-                .builder()
-                .name("hello")
-                .info("says hello world")
-                .locality(ALL)
-                .privacy(PUBLIC)
-                .action(messageContext ->
-                        silent.send("Hello world from Java bot", CHAT_ID)
-                                .ifPresent(message -> LOG.info("Returned msg id {} with username {}",
-                                        message.getMessageId(), message.getChat().getUserName())))
                 .build();
     }
 
@@ -136,11 +119,10 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
                     boolean newUser = !subscribedUsers.contains(String.valueOf(userId));
                     if (newUser) {
                         subscribedUsers.add(String.valueOf(userId));
+                        // send a message to kafka user-preferences
+                        userPrefsKafkaTemplate.send("user-preferences", String.valueOf(userId),
+                                new UserPrefs(String.valueOf(userId), emptyList(), true));
                     }
-
-                    // send a message to kafka user-preferences
-                    userPrefsKafkaTemplate.send("user-preferences", String.valueOf(userId),
-                            new UserPrefs(String.valueOf(userId), emptyList(), true));
 
                     String message = newUser ?
                             "Congratulations! You are now subscribed to Covid19 India Patient alerts!\n\nChoose your preferred state with /mystate\n\nSend /stats to get statistics.\n\nStay safe and keep social distancing!"

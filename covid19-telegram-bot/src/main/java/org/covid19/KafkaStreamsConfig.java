@@ -53,10 +53,18 @@ public class KafkaStreamsConfig {
     public KafkaStreamsConfiguration kStreamsConfig() {
         Map<String, Object> kafkaStreamsProps = new HashMap<>(kafkaProperties.buildStreamsProperties());
         kafkaStreamsProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        kafkaStreamsProps.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 4);
+        kafkaStreamsProps.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 5);
         kafkaStreamsProps.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 10 * 1000);
         kafkaStreamsProps.put(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.OPTIMIZE);
         return new KafkaStreamsConfiguration(kafkaStreamsProps);
+    }
+
+    @Bean
+    public KTable<String, String> newsSourcesTable(StreamsBuilder streamsBuilder) {
+        return streamsBuilder.table("news-sources",
+                Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as(
+                        Stores.inMemoryKeyValueStore("news-sources-inmemory").name())
+                        .withKeySerde(Serdes.String()).withValueSerde(Serdes.String()).withCachingDisabled());
     }
 
     @Bean

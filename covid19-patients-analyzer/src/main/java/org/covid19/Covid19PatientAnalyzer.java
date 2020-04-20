@@ -71,18 +71,13 @@ public class Covid19PatientAnalyzer {
                         Materialized.as(STATE_STORE_CHANGELOG_POSTED_MESSAGES));
 
         final KStream<String, PatientInfo> cleanedPatients = patients
-//                .peek((patientNumber, patientInfo) ->
-//                        LOG.info("Processing patient number {} with patientInfo {}", patientNumber, patientInfo))
                 // clean out upcoming patients with no useful information yet
                 .filter(Covid19PatientAnalyzer::cleanData);
 
         cleanedPatients
-//                .peek((patientNumber, patientInfo) ->
-//                        LOG.info("Sufficient info found for patient number {}", patientNumber))
                 .leftJoin(postedMessages, (latestPatientInfo, patientAndMessage) -> {
                     if (isHospitalized(latestPatientInfo)) {
                         // we skip hospitalized patients as they are too many now.
-//                        LOG.info("Skipping as status is hospitalized for patient number {}", latestPatientInfo.getPatientNumber());
                         return null;
                     }
                     // this is a new patient, not alerted before
@@ -99,7 +94,7 @@ public class Covid19PatientAnalyzer {
                     return null;
                 })
                 // filter out unchanged/irrelevant patient information
-                .filter((patientNumber, patientAndMessage) -> Objects.nonNull(patientAndMessage))
+                .filter((patientNumber, patientAndMessage) -> nonNull(patientAndMessage))
                 .peek((patientNumber, patientAndMessage) ->
                         LOG.info("Patient number {} sending to kafka send-alerts topic", patientNumber))
                 .to(STREAM_ALERTS, Produced.with(stringSerde, new PatientAndMessageSerde()));
@@ -184,12 +179,12 @@ public class Covid19PatientAnalyzer {
 
     private static boolean moreInfoAvailable(PatientInfo latestPatientInfo, PatientInfo oldPatientInfo) {
         // null check required because notes field was missed earlier
-        if (Objects.nonNull(latestPatientInfo.getNotes()) &&
+        if (nonNull(latestPatientInfo.getNotes()) &&
                 !latestPatientInfo.getNotes().equalsIgnoreCase(oldPatientInfo.getNotes())) {
             LOG.info("Detected change in field notes for patient #{}", latestPatientInfo.getPatientNumber());
             return true;
         }
-        if (Objects.nonNull(latestPatientInfo.getBackupNotes()) &&
+        if (nonNull(latestPatientInfo.getBackupNotes()) &&
                 !latestPatientInfo.getBackupNotes().equalsIgnoreCase(oldPatientInfo.getBackupNotes())) {
             LOG.info("Detected change in field backupnotes for patient #{}", latestPatientInfo.getPatientNumber());
             return true;
@@ -208,7 +203,7 @@ public class Covid19PatientAnalyzer {
     }
 
     private static boolean currentStatusExists(PatientInfo patientInfo) {
-        return Objects.nonNull(patientInfo.getCurrentStatus()) && !patientInfo.getCurrentStatus().isEmpty();
+        return nonNull(patientInfo.getCurrentStatus()) && !patientInfo.getCurrentStatus().isEmpty();
     }
 
     private static void initEnv() {

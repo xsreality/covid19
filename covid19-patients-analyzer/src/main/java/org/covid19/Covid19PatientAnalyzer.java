@@ -127,7 +127,7 @@ public class Covid19PatientAnalyzer {
                 () -> new DeduplicationTransformer<>(windowSize.toMillis(), (key, value) -> bestNewsSource(value), NEWS_STORE),
                 NEWS_STORE);
         deduplicated
-                .filter((key, patientInfo) -> isHospitalized(patientInfo) || isWithinPastWeek(patientInfo.getDateAnnounced()))
+                .filter((key, patientInfo) -> isWithinPastWeek(patientInfo.getDateAnnounced()))
                 .selectKey((key, value) -> value.getDetectedState())
                 .mapValues((readOnlyKey, patientInfo) -> bestNewsSource(patientInfo))
                 .filter((key, news) -> nonNull(news))

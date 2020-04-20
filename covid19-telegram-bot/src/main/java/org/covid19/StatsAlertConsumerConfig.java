@@ -194,8 +194,14 @@ public class StatsAlertConsumerConfig {
         }
         StatewiseDelta delta = stateStores.deltaStatsForState(request.getState());
         StatewiseDelta daily = stateStores.dailyStatsForState(request.getState());
+        String newsSource = stateStores.newsSourceFor(request.getState());
+
         AtomicReference<String> alertText = new AtomicReference<>("");
         buildSummaryAlertBlock(alertText, singletonList(delta), singletonList(daily));
+        if (!TOTAL.equalsIgnoreCase(request.getState())) {
+            alertText.accumulateAndGet(newsSource, (current, update) -> current + "Source: " + update);
+        }
+
         sendTelegramAlert(covid19Bot, request.getChatId(), alertText.get(), null, true);
     }
 

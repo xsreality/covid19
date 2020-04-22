@@ -121,6 +121,7 @@ public class StatsAlertConsumerConfig {
         }
         List<StatewiseDelta> readyToSend = new ArrayList<>();
         List<StatewiseDelta> dailyIncrements = new ArrayList<>();
+        Map<String, String> doublingRates = new HashMap<>();
         String lastUpdated = deltas.get(deltas.size() - 1).getLastUpdatedTime();
 
         for (StatewiseDelta delta : deltas) {
@@ -132,11 +133,12 @@ public class StatsAlertConsumerConfig {
             }
             readyToSend.add(delta);
             dailyIncrements.add(stateStores.dailyStatsForState(delta.getState()));
+            doublingRates.put(delta.getState(), stateStores.doublingRateFor(delta.getState()));
         }
         if (readyToSend.isEmpty()) {
             return; // no useful update
         }
-        String alertTextForAllStates = buildStatewiseAlertText(friendlyTime(lastUpdated), readyToSend, dailyIncrements);
+        String alertTextForAllStates = buildStatewiseAlertText(friendlyTime(lastUpdated), readyToSend, dailyIncrements, doublingRates);
 
         final KeyValueIterator<String, UserPrefs> userPrefsIterator = stateStores.userPrefs();
         userPrefsIterator.forEachRemaining(keyValue -> {
@@ -155,6 +157,7 @@ public class StatsAlertConsumerConfig {
             // user has a preferred state
             List<StatewiseDelta> userStatesDelta = new ArrayList<>();
             List<StatewiseDelta> userStatesDaily = new ArrayList<>();
+            Map<String, String> userDoublingRates = new HashMap<>();
             String lastUpdatedUserState = deltas.get(deltas.size() - 1).getLastUpdatedTime();
             boolean userHasRelevantUpdate = false;
             for (StatewiseDelta delta : deltas) {
@@ -162,6 +165,7 @@ public class StatsAlertConsumerConfig {
                     lastUpdatedUserState = delta.getLastUpdatedTime();
                     userStatesDelta.add(stateStores.deltaStatsForState(TOTAL));
                     userStatesDaily.add(stateStores.dailyStatsForState(TOTAL));
+                    userDoublingRates.put(delta.getState(), stateStores.doublingRateFor(delta.getState()));
                     continue;
                 }
                 if (delta.getDeltaRecovered() < 1L && delta.getDeltaConfirmed() < 1L && delta.getDeltaDeaths() < 1L) {
@@ -172,6 +176,7 @@ public class StatsAlertConsumerConfig {
                     userHasRelevantUpdate = true;
                     userStatesDelta.add(stateStores.deltaStatsForState(delta.getState()));
                     userStatesDaily.add(stateStores.dailyStatsForState(delta.getState()));
+                    userDoublingRates.put(delta.getState(), stateStores.doublingRateFor(delta.getState()));
                 }
             }
             if (!userHasRelevantUpdate) {
@@ -179,7 +184,7 @@ public class StatsAlertConsumerConfig {
                 return; // no useful update for this user
             }
             LOG.info("Update is relevant for user {}", userPref.getUserId());
-            String alertTextForUserStates = buildStatewiseAlertText(friendlyTime(lastUpdatedUserState), userStatesDelta, userStatesDaily);
+            String alertTextForUserStates = buildStatewiseAlertText(friendlyTime(lastUpdatedUserState), userStatesDelta, userStatesDaily, userDoublingRates);
             sendTelegramAlert(covid19Bot, userPref.getUserId(), alertTextForUserStates, null, true);
         });
     }
@@ -195,9 +200,11 @@ public class StatsAlertConsumerConfig {
         StatewiseDelta delta = stateStores.deltaStatsForState(request.getState());
         StatewiseDelta daily = stateStores.dailyStatsForState(request.getState());
         String newsSource = stateStores.newsSourceFor(request.getState());
+        Map<String, String> doublingRates = new HashMap<>();
+        doublingRates.put(request.getState(), stateStores.doublingRateFor(request.getState()));
 
         AtomicReference<String> alertText = new AtomicReference<>("");
-        buildSummaryAlertBlock(alertText, singletonList(delta), singletonList(daily));
+        buildSummaryAlertBlock(alertText, singletonList(delta), singletonList(daily), doublingRates);
         if (!TOTAL.equalsIgnoreCase(request.getState())) {
             alertText.accumulateAndGet(newsSource, (current, update) -> current + "Source: " + update);
         }

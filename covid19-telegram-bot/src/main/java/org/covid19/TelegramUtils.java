@@ -97,14 +97,14 @@ public class TelegramUtils {
         }
     }
 
-    static String buildStatewiseAlertText(String lastUpdated, List<StatewiseDelta> deltas, List<StatewiseDelta> dailies) {
+    static String buildStatewiseAlertText(String lastUpdated, List<StatewiseDelta> deltas, List<StatewiseDelta> dailies, Map<String, String> doublingRates) {
         AtomicReference<String> alertText = new AtomicReference<>("");
         deltas.forEach(delta -> buildDeltaAlertLine(alertText, delta));
         if (alertText.get().isEmpty() || "\n".equalsIgnoreCase(alertText.get())) {
             LOG.info("No useful update to alert on. Skipping...");
             return "";
         }
-        buildSummaryAlertBlock(alertText, deltas, dailies);
+        buildSummaryAlertBlock(alertText, deltas, dailies, doublingRates);
         String finalText = String.format("<i>%s</i>\n\n%s", lastUpdated, alertText.get());
         LOG.info("Statewise Alert text generated:\n{}", finalText);
         return finalText;
@@ -121,20 +121,23 @@ public class TelegramUtils {
         });
     }
 
-    static void buildSummaryAlertBlock(AtomicReference<String> updateText, List<StatewiseDelta> deltas, List<StatewiseDelta> dailies) {
+    static void buildSummaryAlertBlock(AtomicReference<String> updateText, List<StatewiseDelta> deltas,
+                                       List<StatewiseDelta> dailies, Map<String, String> doublingRates) {
         zip(deltas, dailies).forEach(pair -> {
             StatewiseDelta delta = pair.getKey();
             StatewiseDelta daily = pair.getValue();
             String statText = String.format("\n<b>%s</b>\n" +
                             "<pre>\n" +
-                            "Total cases: (↑%s) %s\n" +
-                            "Recovered  : (↑%s) %s\n" +
-                            "Deaths     : (↑%s) %s\n" +
+                            "Total cases  : (↑%s) %s\n" +
+                            "Recovered    : (↑%s) %s\n" +
+                            "Deaths       : (↑%s) %s\n" +
+                            "Doubling rate: %s day(s)\n" +
                             "</pre>\n",
                     delta.getState(),
                     nonNull(daily) ? daily.getDeltaConfirmed() : "", delta.getCurrentConfirmed(),
                     nonNull(daily) ? daily.getDeltaRecovered() : "", delta.getCurrentRecovered(),
-                    nonNull(daily) ? daily.getDeltaDeaths() : "", delta.getCurrentDeaths());
+                    nonNull(daily) ? daily.getDeltaDeaths() : "", delta.getCurrentDeaths(),
+                    doublingRates.get(delta.getState()));
             updateText.accumulateAndGet(statText, (current, update) -> current + update);
         });
     }

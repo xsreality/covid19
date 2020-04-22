@@ -4,7 +4,9 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.covid19.TelegramUtils.buildDeltaAlertLine;
@@ -61,15 +63,18 @@ public class AlertTextTests {
     void summaryAlertBlock() {
         final String expectedSummaryBlock = "\n<b>Total</b>\n" +
                 "<pre>\n" +
-                "Total cases: (↑15) 5341\n" +
-                "Recovered  : (↑9) 455\n" +
-                "Deaths     : (↑4) 157\n" +
+                "Total cases  : (↑15) 5341\n" +
+                "Recovered    : (↑9) 455\n" +
+                "Deaths       : (↑4) 157\n" +
+                "Doubling rate: 250 day(s)\n" +
                 "</pre>\n";
         AtomicReference<String> actualSummaryBlock = new AtomicReference<>("");
 
         List<StatewiseDelta> deltas = Collections.singletonList(new StatewiseDelta(9L, 4L, 15L, 455L, 157L, 5341L, "", "Total"));
         List<StatewiseDelta> dailies = Collections.singletonList(new StatewiseDelta(9L, 4L, 15L, 0L, 0L, 0L, "", "Total"));
-        buildSummaryAlertBlock(actualSummaryBlock, deltas, dailies);
+        Map<String, String> doublingRates = new HashMap<>();
+        doublingRates.put("Total", "250");
+        buildSummaryAlertBlock(actualSummaryBlock, deltas, dailies, doublingRates);
 
         assertEquals(expectedSummaryBlock, actualSummaryBlock.get(), "Summary block is not structured correctly!");
     }
@@ -83,23 +88,26 @@ public class AlertTextTests {
                 "\n" +
                 "<b>Assam</b>\n" +
                 "<pre>\n" +
-                "Total cases: (↑1) 28\n" +
-                "Recovered  : (↑0) 0\n" +
-                "Deaths     : (↑0) 0\n" +
+                "Total cases  : (↑1) 28\n" +
+                "Recovered    : (↑0) 0\n" +
+                "Deaths       : (↑0) 0\n" +
+                "Doubling rate: 19.44 day(s)\n" +
                 "</pre>\n" +
                 "\n" +
                 "<b>Himachal Pradesh</b>\n" +
                 "<pre>\n" +
-                "Total cases: (↑9) 27\n" +
-                "Recovered  : (↑0) 1\n" +
-                "Deaths     : (↑0) 2\n" +
+                "Total cases  : (↑9) 27\n" +
+                "Recovered    : (↑0) 1\n" +
+                "Deaths       : (↑0) 2\n" +
+                "Doubling rate: 2.10 day(s)\n" +
                 "</pre>\n" +
                 "\n" +
                 "<b>Total</b>\n" +
                 "<pre>\n" +
-                "Total cases: (↑31) 5341\n" +
-                "Recovered  : (↑8) 455\n" +
-                "Deaths     : (↑3) 157\n" +
+                "Total cases  : (↑31) 5341\n" +
+                "Recovered    : (↑8) 455\n" +
+                "Deaths       : (↑3) 157\n" +
+                "Doubling rate: 116 day(s)\n" +
                 "</pre>\n";
 
         String lastUpdated = "April 08, 12:04 AM";
@@ -112,8 +120,13 @@ public class AlertTextTests {
                 new StatewiseDelta(0L, 0L, 1L, 0L, 0L, 28L, "08/04/2020 23:41:35", "Assam"),
                 new StatewiseDelta(0L, 0L, 9L, 1L, 2L, 27L, "08/04/2020 00:04:28", "Himachal Pradesh"),
                 new StatewiseDelta(0L, 0L, 9L, 455L, 157L, 5341L, "08/04/2020 00:04:28", "Total"));
+        Map<String, String> doublingRates = new HashMap<>();
+        doublingRates.put("Assam", "19.44");
+        doublingRates.put("Himachal Pradesh", "2.10");
+        doublingRates.put("Total", "116");
 
-        final String actualFinalAlert = buildStatewiseAlertText(lastUpdated, deltas, dailies);
+
+        final String actualFinalAlert = buildStatewiseAlertText(lastUpdated, deltas, dailies, doublingRates);
 
         assertEquals(expectedFinalAlert, actualFinalAlert, "Summary block is not structured correctly!");
     }

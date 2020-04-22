@@ -8,25 +8,29 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
-import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.QueryableStoreType;
+import org.apache.kafka.streams.state.QueryableStoreTypes;
+import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.WindowStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.time.Duration;
+import java.time.format.DateTimeFormatter;
 import java.util.Properties;
 
 import static java.lang.Long.parseLong;
+import static java.time.Duration.ofDays;
+import static java.time.ZoneId.of;
 import static java.util.Objects.isNull;
-import static java.util.Objects.nonNull;
 
 public class Covid19Stats {
     private static final Logger LOG = LoggerFactory.getLogger(Covid19Stats.class);
@@ -34,10 +38,9 @@ public class Covid19Stats {
     private static String KAFKA_GLOBAL_STATS_APPLICATION_ID;
     private static String BOOTSTRAP_SERVERS;
     private static String KAFKA_GLOBAL_STATS_CLIENT_ID;
-    private static String KAFKA_TOPIC_PATIENT_STATUS_COUNT;
-    private static String KAFKA_TOPIC_PATIENT_ALERTS;
+    private static String STATE_DIR;
 
-    public static void main(final String[] args) {
+    public static void main(final String[] args) throws InterruptedException {
         initEnv();
 
         final Properties streamsConfiguration = new Properties();
@@ -49,13 +52,16 @@ public class Covid19Stats {
         streamsConfiguration.put(StreamsConfig.TOPOLOGY_OPTIMIZATION, "all");
         streamsConfiguration.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 3);
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, STATE_DIR);
         // Records should be flushed every 10 seconds. This is less than the default
         // in order to keep this example interactive.
-        streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 3 * 1000);
+        streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 10 * 1000);
+
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy").withZone(of("UTC"));
 
         final Serde<String> stringSerde = Serdes.String();
         final Serde<Long> longSerde = Serdes.Long();
-        final Serde<PatientAndMessage> patientAndMessageSerde = new PatientAndMessageSerde();
+        final Serde<StateAndDate> stateAndDateSerde = new StateAndDateSerde();
         final Serde<StatewiseStats> statewiseStatsSerde = new StatewiseStatsSerde();
         final Serde<StatewiseDelta> statewiseDeltaSerde = new StatewiseDeltaSerde();
 
@@ -68,22 +74,8 @@ public class Covid19Stats {
                         .withKeySerde(stringSerde).withValueSerde(statewiseStatsSerde)
                         .withLoggingDisabled())
                 .groupBy(KeyValue::pair, Grouped.with(stringSerde, statewiseStatsSerde))
-                .aggregate(StatewiseDelta::new, (state, newStatewiseStats, aggregate) -> {
-                            // update deltas
-                            aggregate.setDeltaRecovered(parseLong(newStatewiseStats.getRecovered()) - aggregate.getCurrentRecovered());
-                            aggregate.setDeltaDeaths(parseLong(newStatewiseStats.getDeaths()) - aggregate.getCurrentDeaths());
-                            aggregate.setDeltaConfirmed(parseLong(newStatewiseStats.getConfirmed()) - aggregate.getCurrentConfirmed());
-
-                            // update current values
-                            aggregate.setCurrentRecovered(parseLong(newStatewiseStats.getRecovered()));
-                            aggregate.setCurrentDeaths(parseLong(newStatewiseStats.getDeaths()));
-                            aggregate.setCurrentConfirmed(parseLong(newStatewiseStats.getConfirmed()));
-
-                            // update metadata
-                            aggregate.setLastUpdatedTime(newStatewiseStats.getLastUpdatedTime());
-                            aggregate.setState(state);
-                            return aggregate;
-                        }, (state, oldStatewiseStats, aggregate) -> aggregate,
+                .aggregate(StatewiseDelta::new, Covid19Stats::calculateDeltaStats,
+                        (state, oldStatewiseStats, aggregate) -> aggregate,
                         Materialized.<String, StatewiseDelta, KeyValueStore<Bytes, byte[]>>as("statewise-delta")
                                 .withKeySerde(stringSerde)
                                 .withValueSerde(statewiseDeltaSerde))
@@ -92,29 +84,31 @@ public class Covid19Stats {
 
 
         // topology to build daily incremental stats
-        builder.stream("org.covid19.patient-status-stats-statewise-delta-changelog",
-                Consumed.with(stringSerde, statewiseDeltaSerde))
-                .groupByKey(Grouped.with(stringSerde, statewiseDeltaSerde))
-                .windowedBy(TimeWindows.of(Duration.ofDays(1L)))
-                .aggregate(StatewiseDelta::new, (state, newDelta, aggregate) -> {
-                    aggregate.setDeltaConfirmed(aggregate.getDeltaConfirmed() + newDelta.getDeltaConfirmed());
-                    aggregate.setDeltaRecovered(aggregate.getDeltaRecovered() + newDelta.getDeltaRecovered());
-                    aggregate.setDeltaDeaths(aggregate.getDeltaDeaths() + newDelta.getDeltaDeaths());
+        final KTable<Windowed<String>, StatewiseDelta> statewiseWindowedTable =
+                builder.stream("org.covid19.patient-status-stats-statewise-delta-changelog",
+                        Consumed.with(stringSerde, statewiseDeltaSerde))
+                        .groupByKey(Grouped.with(stringSerde, statewiseDeltaSerde))
+                        .windowedBy(TimeWindows.of(ofDays(1L)))
+                        .aggregate(StatewiseDelta::new, (state, newDelta, aggregate) -> calculateDailyIncrements(newDelta, aggregate),
+                                Materialized.<String, StatewiseDelta, WindowStore<Bytes, byte[]>>as("statewise-windowed-daily")
+                                        .withKeySerde(stringSerde)
+                                        .withValueSerde(statewiseDeltaSerde)
+                                        .withCachingDisabled()
+                                        .withRetention(ofDays(365L)));
 
-                    aggregate.setCurrentConfirmed(newDelta.getCurrentConfirmed());
-                    aggregate.setCurrentRecovered(newDelta.getCurrentRecovered());
-                    aggregate.setCurrentDeaths(newDelta.getCurrentDeaths());
-
-                    aggregate.setState(newDelta.getState());
-                    aggregate.setLastUpdatedTime(newDelta.getLastUpdatedTime());
-                    return aggregate;
-                }, Materialized.<String, StatewiseDelta, WindowStore<Bytes, byte[]>>as("statewise-windowed-daily")
-                        .withKeySerde(stringSerde)
-                        .withValueSerde(statewiseDeltaSerde)
-                        .withCachingDisabled())
+        // store state -> daily stats in a stream
+        statewiseWindowedTable
                 .toStream()
                 .map((Windowed<String> key, StatewiseDelta delta) -> new KeyValue<>(key.key(), delta))
-                .to("statewise-daily-stats", Produced.with(stringSerde, statewiseDeltaSerde));
+                .to("statewise-daily-stats", Produced.with(stringSerde, statewiseDeltaSerde))
+        ;
+
+        // store state + window -> daily stats in a stream
+        statewiseWindowedTable
+                .toStream()
+                .selectKey((key, value) -> new StateAndDate(formatter.format(key.window().startTime()), key.key()))
+                .to("daily-states-count", Produced.with(stateAndDateSerde, statewiseDeltaSerde))
+        ;
 
         final KafkaStreams streams = new KafkaStreams(builder.build(), streamsConfiguration);
 
@@ -122,8 +116,56 @@ public class Covid19Stats {
 
         streams.start();
 
+        final ReadOnlyWindowStore<String, StatewiseDelta> dailyWindowStore =
+                waitUntilStoreIsQueryable("statewise-windowed-daily", QueryableStoreTypes.windowStore(), streams);
+
+        // Fetch values for the key "world" for all of the windows available in this application instance.
+// To get *all* available windows we fetch windows from the beginning of time until now.
+//        Instant timeFrom = Instant.ofEpochMilli(0); // beginning of time = oldest available
+//        Instant timeTo = Instant.now(); // now (in processing-time)
+//        WindowStoreIterator<StatewiseDelta> iterator = dailyWindowStore.fetch("Total", timeFrom, timeTo);
+//        while (iterator.hasNext()) {
+//            KeyValue<Long, StatewiseDelta> next = iterator.next();
+//
+//            long windowTimestamp = next.key;
+//            System.out.println("Count of 'Total' @ time " + windowTimestamp + " is " + next.value);
+//        }
+//// close the iterator to release resources
+//        iterator.close();
+
         // Add shutdown hook to respond to SIGTERM and gracefully close Kafka Streams
         Runtime.getRuntime().addShutdownHook(new Thread(streams::close));
+    }
+
+    private static StatewiseDelta calculateDeltaStats(String state, StatewiseStats newStatewiseStats, StatewiseDelta aggregate) {
+        // update deltas
+        aggregate.setDeltaRecovered(parseLong(newStatewiseStats.getRecovered()) - aggregate.getCurrentRecovered());
+        aggregate.setDeltaDeaths(parseLong(newStatewiseStats.getDeaths()) - aggregate.getCurrentDeaths());
+        aggregate.setDeltaConfirmed(parseLong(newStatewiseStats.getConfirmed()) - aggregate.getCurrentConfirmed());
+
+        // update current values
+        aggregate.setCurrentRecovered(parseLong(newStatewiseStats.getRecovered()));
+        aggregate.setCurrentDeaths(parseLong(newStatewiseStats.getDeaths()));
+        aggregate.setCurrentConfirmed(parseLong(newStatewiseStats.getConfirmed()));
+
+        // update metadata
+        aggregate.setLastUpdatedTime(newStatewiseStats.getLastUpdatedTime());
+        aggregate.setState(state);
+        return aggregate;
+    }
+
+    private static StatewiseDelta calculateDailyIncrements(StatewiseDelta newDelta, StatewiseDelta aggregate) {
+        aggregate.setDeltaConfirmed(aggregate.getDeltaConfirmed() + newDelta.getDeltaConfirmed());
+        aggregate.setDeltaRecovered(aggregate.getDeltaRecovered() + newDelta.getDeltaRecovered());
+        aggregate.setDeltaDeaths(aggregate.getDeltaDeaths() + newDelta.getDeltaDeaths());
+
+        aggregate.setCurrentConfirmed(newDelta.getCurrentConfirmed());
+        aggregate.setCurrentRecovered(newDelta.getCurrentRecovered());
+        aggregate.setCurrentDeaths(newDelta.getCurrentDeaths());
+
+        aggregate.setState(newDelta.getState());
+        aggregate.setLastUpdatedTime(newDelta.getLastUpdatedTime());
+        return aggregate;
     }
 
     private static void initEnv() {
@@ -135,19 +177,28 @@ public class Covid19Stats {
             LOG.error("Environment variable KAFKA_GLOBAL_STATS_APPLICATION_ID must be set!");
             System.exit(-1);
         }
-        if (isNull(System.getenv("KAFKA_TOPIC_PATIENT_ALERTS"))) {
-            LOG.error("Environment variable KAFKA_TOPIC_PATIENT_ALERTS must be set!");
-            System.exit(-1);
-        }
-        if (isNull(System.getenv("KAFKA_TOPIC_PATIENT_STATUS_COUNT"))) {
-            LOG.error("Environment variable KAFKA_TOPIC_PATIENT_STATUS_COUNT must be set!");
+        if (isNull(System.getenv("KAFKA_STATE_DIR"))) {
+            LOG.error("Environment variable KAFKA_STATE_DIR must be set!");
             System.exit(-1);
         }
 
         BOOTSTRAP_SERVERS = System.getenv("BOOTSTRAP_SERVERS");
         KAFKA_GLOBAL_STATS_APPLICATION_ID = System.getenv("KAFKA_GLOBAL_STATS_APPLICATION_ID");
         KAFKA_GLOBAL_STATS_CLIENT_ID = KAFKA_GLOBAL_STATS_APPLICATION_ID + "-client";
-        KAFKA_TOPIC_PATIENT_ALERTS = System.getenv("KAFKA_TOPIC_PATIENT_ALERTS");
-        KAFKA_TOPIC_PATIENT_STATUS_COUNT = System.getenv("KAFKA_TOPIC_PATIENT_STATUS_COUNT");
+        STATE_DIR = System.getenv("KAFKA_STATE_DIR");
+    }
+
+    private static <T> T waitUntilStoreIsQueryable(final String storeName,
+                                                   final QueryableStoreType<T> queryableStoreType,
+                                                   final KafkaStreams streams) throws InterruptedException {
+        while (true) {
+            try {
+                return streams.store(storeName, queryableStoreType);
+            } catch (InvalidStateStoreException ignored) {
+                // store not yet ready for querying
+                LOG.info("Store not yet open... {}", ignored.getMessage());
+                Thread.sleep(1000);
+            }
+        }
     }
 }

@@ -24,6 +24,8 @@ import org.apache.kafka.streams.state.WindowStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.text.DecimalFormat;
+import java.time.Instant;
 import java.time.format.DateTimeFormatter;
 import java.util.Properties;
 
@@ -57,7 +59,8 @@ public class Covid19Stats {
         // in order to keep this example interactive.
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 10 * 1000);
 
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy").withZone(of("UTC"));
+        DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy").withZone(of("UTC"));
+        DecimalFormat decimalFormatter = new DecimalFormat("0.00");
 
         final Serde<String> stringSerde = Serdes.String();
         final Serde<Long> longSerde = Serdes.Long();
@@ -99,15 +102,26 @@ public class Covid19Stats {
         // store state -> daily stats in a stream
         statewiseWindowedTable
                 .toStream()
-                .map((Windowed<String> key, StatewiseDelta delta) -> new KeyValue<>(key.key(), delta))
+                .selectKey((windowedKey, delta) -> windowedKey.key())
                 .to("statewise-daily-stats", Produced.with(stringSerde, statewiseDeltaSerde))
         ;
 
         // store state + window -> daily stats in a stream
         statewiseWindowedTable
                 .toStream()
-                .selectKey((key, value) -> new StateAndDate(formatter.format(key.window().startTime()), key.key()))
+                .selectKey((key, value) -> new StateAndDate(dateTimeFormatter.format(key.window().startTime()), key.key()))
                 .to("daily-states-count", Produced.with(stateAndDateSerde, statewiseDeltaSerde))
+        ;
+
+        // calculate doubling rate and store in a stream
+        statewiseWindowedTable
+                .toStream()
+                .map((windowedKey, statewiseDelta) -> {
+                    String state = windowedKey.key();
+                    String doublingRate = calculateDoublingRate(statewiseDelta, decimalFormatter);
+                    return new KeyValue<>(state, doublingRate);
+                })
+                .to("doubling-rate", Produced.with(stringSerde, stringSerde))
         ;
 
         final KafkaStreams streams = new KafkaStreams(builder.build(), streamsConfiguration);
@@ -135,6 +149,21 @@ public class Covid19Stats {
 
         // Add shutdown hook to respond to SIGTERM and gracefully close Kafka Streams
         Runtime.getRuntime().addShutdownHook(new Thread(streams::close));
+    }
+
+    private static String calculateDoublingRate(StatewiseDelta statewiseDelta, DecimalFormat decimalFormatter) {
+        if (statewiseDelta.getDeltaConfirmed() == 0L || statewiseDelta.getCurrentConfirmed() == 0L) {
+            return "0";
+        }
+        final double growthPercent = 100.0 * statewiseDelta.getDeltaConfirmed() / statewiseDelta.getCurrentConfirmed();
+        final double doublingRate = 70.0 / growthPercent;
+        return decimalFormatter.format(doublingRate);
+    }
+
+    private static boolean isToday(StateAndDate stateAndDate) {
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy").withZone(of("UTC"));
+        String today = formatter.format(Instant.now());
+        return today.equalsIgnoreCase(stateAndDate.getDate());
     }
 
     private static StatewiseDelta calculateDeltaStats(String state, StatewiseStats newStatewiseStats, StatewiseDelta aggregate) {

@@ -34,7 +34,7 @@ if the update is significant. Currently this means either changes in status or n
 
 ### Cumulative + Delta + Daily Increase Updates
 
-![Kafka Streams Architecture](https://i.ibb.co/r2zJFL2/Covid19-India-Alerts-2.png "Covid19 Kafka Streams Architecture")
+![Kafka Streams Architecture](https://i.ibb.co/Zd0Ng7F/Covid19-India-Alerts-4.png "Covid19 Kafka Streams Architecture")
 
 ## Telegram Commands
 

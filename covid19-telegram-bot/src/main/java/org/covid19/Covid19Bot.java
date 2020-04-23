@@ -118,6 +118,16 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
                             silent.send(channelMsg, CHANNEL_ID);
                             return;
                         }
+                        if ("Today".equalsIgnoreCase(userMsg)) {
+                            String chatId = getChatId(ctx.update());
+                            userRequestKafkaTemplate.send("user-request", chatId, new UserRequest(chatId, "Today"));
+
+                            // send an update to Bot channel
+                            String channelMsg = String.format("User %s (%s) requested stats for %s via text %s",
+                                    translateName(ctx.update().getMessage().getChat()), chatId, "Today", userMsg);
+                            silent.send(channelMsg, CHANNEL_ID);
+                            return;
+                        }
                     }
                     String msg = "Send /stats to get latest count of any State or Total\n\n" +
                             "Send /mystate to choose your preferred state and receive updates automatically.";
@@ -302,6 +312,24 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
                     String chatId = getChatId(ctx.update());
                     String channelMsg = String.format("User %s (%s) requested stats for %s via /total",
                             translateName(ctx.update().getMessage().getChat()), chatId, "Total");
+                    silent.send(channelMsg, CHANNEL_ID);
+                })
+                .build();
+    }
+
+    public Ability today() {
+        return Ability
+                .builder().name("today").info("Get today's increase of all Indian States")
+                .locality(ALL).privacy(PUBLIC).input(0)
+                .action(ctx -> {
+                    String chatId = getChatId(ctx.update());
+                    userRequestKafkaTemplate.send("user-request", chatId, new UserRequest(chatId, "Today"));
+                })
+                .post(ctx -> {
+                    // send an update to Bot channel
+                    String chatId = getChatId(ctx.update());
+                    String channelMsg = String.format("User %s (%s) requested stats for %s via /today",
+                            translateName(ctx.update().getMessage().getChat()), chatId, "Today");
                     silent.send(channelMsg, CHANNEL_ID);
                 })
                 .build();

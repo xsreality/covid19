@@ -179,7 +179,8 @@ public class TelegramUtils {
         updateText.accumulateAndGet(textLine, (current, update) -> current + update);
     }
 
-    static String buildStateSummaryAlertText(List<StatewiseDelta> sortedStats, StatewiseDelta total, String lastUpdated) {
+    static String buildStateSummaryAlertText(List<StatewiseDelta> sortedStats, String lastUpdated, boolean daily) {
+        StatewiseDelta total = new StatewiseDelta();
         String text = String.format("<i>%s</i>\n\n", friendlyTime(lastUpdated));
         text = text.concat("Summary of all affected Indian States\n\n");
         text = text.concat("<pre>\n");
@@ -190,13 +191,27 @@ public class TelegramUtils {
                 total = stat;
                 continue; // show total at the end
             }
-            if (stat.getCurrentConfirmed() < 1L && stat.getCurrentRecovered() < 1L && stat.getCurrentDeaths() < 1L) {
-                continue; // skip states with zero stats
+            if (daily) {
+                if (stat.getDeltaConfirmed() < 1L && stat.getDeltaRecovered() < 1L && stat.getDeltaDeaths() < 1L) {
+                    continue; // skip states with zero stats
+                }
+            } else {
+                if (stat.getCurrentConfirmed() < 1L && stat.getCurrentRecovered() < 1L && stat.getCurrentDeaths() < 1L) {
+                    continue; // skip states with zero stats
+                }
             }
-            text = text.concat(String.format("%-5s|%6s|%6s|%5s\n", stateCodes.get(stat.getState()), stat.getCurrentConfirmed(), stat.getCurrentRecovered(), stat.getCurrentDeaths()));
+            text = text.concat(String.format("%-5s|%6s|%6s|%5s\n",
+                    stateCodes.get(stat.getState()),
+                    daily ? stat.getDeltaConfirmed() : stat.getCurrentConfirmed(),
+                    daily ? stat.getDeltaRecovered() : stat.getCurrentRecovered(),
+                    daily ? stat.getDeltaDeaths() : stat.getCurrentDeaths()));
         }
         text = text.concat("-------------------------\n");
-        text = text.concat(String.format("%-5s|%6s|%6s|%5s\n", stateCodes.get(total.getState()), total.getCurrentConfirmed(), total.getCurrentRecovered(), total.getCurrentDeaths()));
+        text = text.concat(String.format("%-5s|%6s|%6s|%5s\n",
+                stateCodes.get(total.getState()),
+                daily ? total.getDeltaConfirmed() : total.getCurrentConfirmed(),
+                daily ? total.getDeltaRecovered() : total.getCurrentRecovered(),
+                daily ? total.getDeltaDeaths() : total.getCurrentDeaths()));
         text = text.concat("</pre>");
         return text;
     }

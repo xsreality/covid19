@@ -12,6 +12,7 @@ To subscribe, just send the command `/start`. To unsubscribe, send the command `
 
 1. All updates carry news sources (links to State Govt / ANI tweets).
 2. Updates include `Doubling rate` based on previous day statistics.
+3. New commands: `/today`, `/summary` and `/total`. See below for more details.
 
 Below is an example of an alert sent by the bot:
 
@@ -64,6 +65,8 @@ Stop receiving updates.
 #### `/stats` - On-demand Statistics
 
 #### `/summary` - Get summary of all Indian States
+
+#### `/today` - Get today's increase of all Indian States
 
 #### `/total` - Get total count across India
 

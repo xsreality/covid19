@@ -53,7 +53,7 @@ public class KafkaStreamsConfig {
     public KafkaStreamsConfiguration kStreamsConfig() {
         Map<String, Object> kafkaStreamsProps = new HashMap<>(kafkaProperties.buildStreamsProperties());
         kafkaStreamsProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        kafkaStreamsProps.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 5);
+        kafkaStreamsProps.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 6);
         kafkaStreamsProps.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 10 * 1000);
         kafkaStreamsProps.put(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.OPTIMIZE);
         return new KafkaStreamsConfiguration(kafkaStreamsProps);
@@ -89,6 +89,14 @@ public class KafkaStreamsConfig {
                 Materialized.<String, UserPrefs, KeyValueStore<Bytes, byte[]>>as(
                         Stores.inMemoryKeyValueStore("user-preferences-inmemory").name())
                         .withKeySerde(Serdes.String()).withValueSerde(new UserPrefsSerde()).withCachingDisabled());
+    }
+
+    @Bean
+    public KTable<StateAndDate, String> doublingRateTable(StreamsBuilder streamsBuilder) {
+        return streamsBuilder.table("doubling-rate",
+                Materialized.<StateAndDate, String, KeyValueStore<Bytes, byte[]>>as(
+                        Stores.inMemoryKeyValueStore("doubling-rate-inmemory").name())
+                        .withKeySerde(new StateAndDateSerde()).withValueSerde(stringSerde).withCachingDisabled());
     }
 
     @Bean

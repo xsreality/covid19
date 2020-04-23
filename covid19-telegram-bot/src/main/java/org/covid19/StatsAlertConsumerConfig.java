@@ -15,6 +15,8 @@ import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
 
+import java.time.Instant;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -24,6 +26,8 @@ import java.util.concurrent.atomic.AtomicReference;
 import lombok.extern.slf4j.Slf4j;
 
 import static io.confluent.kafka.serializers.KafkaJsonDeserializerConfig.JSON_VALUE_TYPE;
+import static java.time.ZoneId.of;
+import static java.time.temporal.ChronoUnit.DAYS;
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.CLIENT_ID_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
@@ -119,8 +123,14 @@ public class StatsAlertConsumerConfig {
         } catch (InterruptedException e) {
             // ignore
         }
+
+        // used to fetch doubling rate of yesterday (today's figure cannot be used as they are not yet final)
+        DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy").withZone(of("UTC"));
+        String yesterday = dateTimeFormatter.format(Instant.now().minus(1, DAYS));
+
         List<StatewiseDelta> readyToSend = new ArrayList<>();
         List<StatewiseDelta> dailyIncrements = new ArrayList<>();
+        Map<String, String> doublingRates = new HashMap<>();
         String lastUpdated = deltas.get(deltas.size() - 1).getLastUpdatedTime();
 
         for (StatewiseDelta delta : deltas) {
@@ -132,11 +142,12 @@ public class StatsAlertConsumerConfig {
             }
             readyToSend.add(delta);
             dailyIncrements.add(stateStores.dailyStatsForState(delta.getState()));
+            doublingRates.put(delta.getState(), stateStores.doublingRateFor(delta.getState(), yesterday));
         }
         if (readyToSend.isEmpty()) {
             return; // no useful update
         }
-        String alertTextForAllStates = buildStatewiseAlertText(friendlyTime(lastUpdated), readyToSend, dailyIncrements);
+        String alertTextForAllStates = buildStatewiseAlertText(friendlyTime(lastUpdated), readyToSend, dailyIncrements, doublingRates);
 
         final KeyValueIterator<String, UserPrefs> userPrefsIterator = stateStores.userPrefs();
         userPrefsIterator.forEachRemaining(keyValue -> {
@@ -155,6 +166,7 @@ public class StatsAlertConsumerConfig {
             // user has a preferred state
             List<StatewiseDelta> userStatesDelta = new ArrayList<>();
             List<StatewiseDelta> userStatesDaily = new ArrayList<>();
+            Map<String, String> userDoublingRates = new HashMap<>();
             String lastUpdatedUserState = deltas.get(deltas.size() - 1).getLastUpdatedTime();
             boolean userHasRelevantUpdate = false;
             for (StatewiseDelta delta : deltas) {
@@ -162,6 +174,7 @@ public class StatsAlertConsumerConfig {
                     lastUpdatedUserState = delta.getLastUpdatedTime();
                     userStatesDelta.add(stateStores.deltaStatsForState(TOTAL));
                     userStatesDaily.add(stateStores.dailyStatsForState(TOTAL));
+                    userDoublingRates.put(delta.getState(), stateStores.doublingRateFor(delta.getState(), yesterday));
                     continue;
                 }
                 if (delta.getDeltaRecovered() < 1L && delta.getDeltaConfirmed() < 1L && delta.getDeltaDeaths() < 1L) {
@@ -172,6 +185,7 @@ public class StatsAlertConsumerConfig {
                     userHasRelevantUpdate = true;
                     userStatesDelta.add(stateStores.deltaStatsForState(delta.getState()));
                     userStatesDaily.add(stateStores.dailyStatsForState(delta.getState()));
+                    userDoublingRates.put(delta.getState(), stateStores.doublingRateFor(delta.getState(), yesterday));
                 }
             }
             if (!userHasRelevantUpdate) {
@@ -179,7 +193,7 @@ public class StatsAlertConsumerConfig {
                 return; // no useful update for this user
             }
             LOG.info("Update is relevant for user {}", userPref.getUserId());
-            String alertTextForUserStates = buildStatewiseAlertText(friendlyTime(lastUpdatedUserState), userStatesDelta, userStatesDaily);
+            String alertTextForUserStates = buildStatewiseAlertText(friendlyTime(lastUpdatedUserState), userStatesDelta, userStatesDaily, userDoublingRates);
             sendTelegramAlert(covid19Bot, userPref.getUserId(), alertTextForUserStates, null, true);
         });
     }
@@ -192,12 +206,18 @@ public class StatsAlertConsumerConfig {
             sendTelegramAlert(covid19Bot, request.getChatId(), buildStateSummary(), null, true);
             return;
         }
+
+        DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy").withZone(of("UTC"));
+        String yesterday = dateTimeFormatter.format(Instant.now().minus(1, DAYS));
+
         StatewiseDelta delta = stateStores.deltaStatsForState(request.getState());
         StatewiseDelta daily = stateStores.dailyStatsForState(request.getState());
         String newsSource = stateStores.newsSourceFor(request.getState());
+        Map<String, String> doublingRates = new HashMap<>();
+        doublingRates.put(request.getState(), stateStores.doublingRateFor(request.getState(), yesterday));
 
         AtomicReference<String> alertText = new AtomicReference<>("");
-        buildSummaryAlertBlock(alertText, singletonList(delta), singletonList(daily));
+        buildSummaryAlertBlock(alertText, singletonList(delta), singletonList(daily), doublingRates);
         if (!TOTAL.equalsIgnoreCase(request.getState())) {
             alertText.accumulateAndGet(newsSource, (current, update) -> current + "Source: " + update);
         }

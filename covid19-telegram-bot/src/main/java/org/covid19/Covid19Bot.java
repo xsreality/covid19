@@ -527,7 +527,7 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
     }
 
     private Predicate<Update> isCallbackOrMessage(String msg) {
-        return upd -> (upd.hasMessage() && upd.getMessage().getText().equalsIgnoreCase(msg)) ||
+        return upd -> (upd.hasMessage() && upd.getMessage().hasText() && upd.getMessage().getText().equalsIgnoreCase(msg)) ||
                 (upd.hasCallbackQuery() && upd.getCallbackQuery().getData().equalsIgnoreCase(msg));
     }
 

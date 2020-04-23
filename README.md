@@ -8,10 +8,15 @@ The Telegram Bot is available at https://t.me/covid19_india_alerts_bot
 
 To subscribe, just send the command `/start`. To unsubscribe, send the command `/stop`.
 
+## New Features
+
+1. All updates carry news sources (links to State Govt / ANI tweets).
+2. Updates include `Doubling rate` based on previous day statistics.
+
 Below is an example of an alert sent by the bot:
 
 ![Sample Telegram Bot Alert screenshot](https://i.ibb.co/V3hQLwV/Screenshot-20200402-000351.jpg "Sample Telegram alert")
-![Sample Telegram Bot Statewise Alert screenshot](https://i.ibb.co/RyGHc1t/Screenshot-20200410-115109.jpg "Statewise alert")
+![Sample Telegram Bot Statewise Alert screenshot](https://i.ibb.co/hRw0Qt1/Screenshot-20200423-190044.jpg "Statewise alert")
 
 ## Alert Updates
 
@@ -75,4 +80,10 @@ You should get back the cumulative statistics of the chosen state at that point 
 
 ### Python Importer
 
-The Python script that imports the Covid19India API is available here: https://github.com/xsreality/covid19-patient-importer 
+The Python script that imports the Covid19India API is available here: https://github.com/xsreality/covid19-patient-importer
+
+## Contributing
+
+* Contributions for new ideas and open issues are welcome!
+* Please open a GitHub issue before opening a pull request.
+* For any queries, contact me on Telegram at https://t.me/xsreality  

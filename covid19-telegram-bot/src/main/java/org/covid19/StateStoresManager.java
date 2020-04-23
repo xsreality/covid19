@@ -23,6 +23,7 @@ public class StateStoresManager {
     private ReadOnlyKeyValueStore<String, StatewiseDelta> deltaStatsStore;
     private ReadOnlyKeyValueStore<String, UserPrefs> userPrefsStore;
     private ReadOnlyKeyValueStore<String, String> newsSourcesStore;
+    private ReadOnlyKeyValueStore<StateAndDate, String> doublingRateStore;
 
     private KafkaListenerEndpointRegistry registry;
 
@@ -46,13 +47,16 @@ public class StateStoresManager {
                                     KTable<String, StatewiseDelta> dailyStatsTable,
                                     KTable<String, StatewiseDelta> deltaStatsTable,
                                     KTable<String, UserPrefs> userPrefsTable,
-                                    KTable<String, String> newsSourcesTable) {
+                                    KTable<String, String> newsSourcesTable,
+                                    KTable<StateAndDate, String> doublingRateTable) {
         return args -> {
             latch(fb).await(100, TimeUnit.SECONDS);
             dailyStatsStore = fb.getKafkaStreams().store(dailyStatsTable.queryableStoreName(), QueryableStoreTypes.keyValueStore());
             deltaStatsStore = fb.getKafkaStreams().store(deltaStatsTable.queryableStoreName(), QueryableStoreTypes.keyValueStore());
             userPrefsStore = fb.getKafkaStreams().store(userPrefsTable.queryableStoreName(), QueryableStoreTypes.keyValueStore());
             newsSourcesStore = fb.getKafkaStreams().store(newsSourcesTable.queryableStoreName(), QueryableStoreTypes.keyValueStore());
+            newsSourcesStore = fb.getKafkaStreams().store(newsSourcesTable.queryableStoreName(), QueryableStoreTypes.keyValueStore());
+            doublingRateStore = fb.getKafkaStreams().store(doublingRateTable.queryableStoreName(), QueryableStoreTypes.keyValueStore());
             // start consumers only after state store is ready.
             registry.getListenerContainer("statewiseAlertsConsumer").start();
             registry.getListenerContainer("userRequestsConsumer").start();
@@ -85,5 +89,9 @@ public class StateStoresManager {
 
     public String newsSourceFor(String state) {
         return newsSourcesStore.get(state);
+    }
+
+    public String doublingRateFor(String state, String date) {
+        return doublingRateStore.get(new StateAndDate(date, state));
     }
 }

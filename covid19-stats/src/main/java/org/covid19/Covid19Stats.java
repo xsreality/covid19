@@ -30,6 +30,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.Properties;
 
 import static java.lang.Long.parseLong;
+import static java.lang.Math.round;
 import static java.time.Duration.ofDays;
 import static java.time.ZoneId.of;
 import static java.util.Objects.isNull;
@@ -60,7 +61,7 @@ public class Covid19Stats {
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 10 * 1000);
 
         DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy").withZone(of("UTC"));
-        DecimalFormat decimalFormatter = new DecimalFormat("0.00");
+        DecimalFormat decimalFormatter = new DecimalFormat("0");
 
         final Serde<String> stringSerde = Serdes.String();
         final Serde<Long> longSerde = Serdes.Long();
@@ -114,14 +115,9 @@ public class Covid19Stats {
         ;
 
         // calculate doubling rate and store in a stream
-        statewiseWindowedTable
-                .toStream()
-                .map((windowedKey, statewiseDelta) -> {
-                    String state = windowedKey.key();
-                    String doublingRate = calculateDoublingRate(statewiseDelta, decimalFormatter);
-                    return new KeyValue<>(state, doublingRate);
-                })
-                .to("doubling-rate", Produced.with(stringSerde, stringSerde))
+        builder.stream("daily-states-count", Consumed.with(stateAndDateSerde, statewiseDeltaSerde))
+                .mapValues((readOnlyKey, statewiseDelta) -> calculateDoublingRate(statewiseDelta, decimalFormatter))
+                .to("doubling-rate", Produced.with(stateAndDateSerde, stringSerde))
         ;
 
         final KafkaStreams streams = new KafkaStreams(builder.build(), streamsConfiguration);
@@ -157,7 +153,7 @@ public class Covid19Stats {
         }
         final double growthPercent = 100.0 * statewiseDelta.getDeltaConfirmed() / statewiseDelta.getCurrentConfirmed();
         final double doublingRate = 70.0 / growthPercent;
-        return decimalFormatter.format(doublingRate);
+        return decimalFormatter.format(round(doublingRate));
     }
 
     private static boolean isToday(StateAndDate stateAndDate) {

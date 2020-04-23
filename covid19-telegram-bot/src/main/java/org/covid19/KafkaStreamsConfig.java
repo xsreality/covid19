@@ -92,11 +92,11 @@ public class KafkaStreamsConfig {
     }
 
     @Bean
-    public KTable<String, String> doublingRateTable(StreamsBuilder streamsBuilder) {
+    public KTable<StateAndDate, String> doublingRateTable(StreamsBuilder streamsBuilder) {
         return streamsBuilder.table("doubling-rate",
-                Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as(
+                Materialized.<StateAndDate, String, KeyValueStore<Bytes, byte[]>>as(
                         Stores.inMemoryKeyValueStore("doubling-rate-inmemory").name())
-                        .withKeySerde(stringSerde).withValueSerde(stringSerde).withCachingDisabled());
+                        .withKeySerde(new StateAndDateSerde()).withValueSerde(stringSerde).withCachingDisabled());
     }
 
     @Bean

@@ -63,6 +63,10 @@ Stop receiving updates.
 
 #### `/stats` - On-demand Statistics
 
+#### `/summary` - Get summary of all Indian States
+
+#### `/total` - Get total count across India
+
 To get the current statistics of any Indian State or Total, send the command `/stats`.
 
 The bot will reply with an option to choose a region:

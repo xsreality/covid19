@@ -96,6 +96,29 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
                 .privacy(PUBLIC).locality(ALL)
                 .input(0)
                 .action(ctx -> {
+                    if (ctx.update().hasMessage() && ctx.update().getMessage().hasText()) {
+                        String userMsg = ctx.update().getMessage().getText();
+                        if ("Summary".equalsIgnoreCase(userMsg)) {
+                            String chatId = getChatId(ctx.update());
+                            userRequestKafkaTemplate.send("user-request", chatId, new UserRequest(chatId, "Summary"));
+
+                            // send an update to Bot channel
+                            String channelMsg = String.format("User %s (%s) requested stats for %s via text %s",
+                                    translateName(ctx.update().getMessage().getChat()), chatId, "Summary", userMsg);
+                            silent.send(channelMsg, CHANNEL_ID);
+                            return;
+                        }
+                        if ("Total".equalsIgnoreCase(userMsg)) {
+                            String chatId = getChatId(ctx.update());
+                            userRequestKafkaTemplate.send("user-request", chatId, new UserRequest(chatId, "Total"));
+
+                            // send an update to Bot channel
+                            String channelMsg = String.format("User %s (%s) requested stats for %s via text %s",
+                                    translateName(ctx.update().getMessage().getChat()), chatId, "Total", userMsg);
+                            silent.send(channelMsg, CHANNEL_ID);
+                            return;
+                        }
+                    }
                     String msg = "Send /stats to get latest count of any State or Total\n\n" +
                             "Send /mystate to choose your preferred state and receive updates automatically.";
                     silent.send(msg, ctx.chatId());
@@ -202,6 +225,9 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
                         return;
                     }
                     subscribedUsers.add(ctx.firstArg());
+                    // send a message to kafka user-preferences
+                    userPrefsKafkaTemplate.send("user-preferences", String.valueOf(ctx.firstArg()),
+                            new UserPrefs(String.valueOf(ctx.firstArg()), emptyList(), true));
                     String message = "Manually subscribed user: " + ctx.firstArg();
                     silent.send(message, ctx.chatId());
                 })
@@ -220,6 +246,11 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
                         return;
                     }
                     subscribedUsers.remove(ctx.firstArg());
+
+                    // send a message to update kafka user-preferences
+                    userPrefsKafkaTemplate.send("user-preferences", String.valueOf(ctx.firstArg()),
+                            new UserPrefs(String.valueOf(ctx.firstArg()), emptyList(), false));
+
                     String message = "Manually un-subscribed user: " + ctx.firstArg();
                     silent.send(message, ctx.chatId());
                 })
@@ -236,6 +267,42 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
                     subscribedUsers.forEach(user -> listOfUsers.accumulateAndGet(user, (s, s2) -> s + "\n" + s2));
                     String message = "List of users:\n" + listOfUsers;
                     silent.send(message, ctx.chatId());
+                })
+                .build();
+    }
+
+    public Ability summary() {
+        return Ability
+                .builder().name("summary").info("Get latest summary of all Indian states")
+                .locality(ALL).privacy(PUBLIC).input(0)
+                .action(ctx -> {
+                    String chatId = getChatId(ctx.update());
+                    userRequestKafkaTemplate.send("user-request", chatId, new UserRequest(chatId, "Summary"));
+                })
+                .post(ctx -> {
+                    // send an update to Bot channel
+                    String chatId = getChatId(ctx.update());
+                    String channelMsg = String.format("User %s (%s) requested stats for %s via /summary",
+                            translateName(ctx.update().getMessage().getChat()), chatId, "Summary");
+                    silent.send(channelMsg, CHANNEL_ID);
+                })
+                .build();
+    }
+
+    public Ability total() {
+        return Ability
+                .builder().name("total").info("Get total count across India")
+                .locality(ALL).privacy(PUBLIC).input(0)
+                .action(ctx -> {
+                    String chatId = getChatId(ctx.update());
+                    userRequestKafkaTemplate.send("user-request", chatId, new UserRequest(chatId, "Total"));
+                })
+                .post(ctx -> {
+                    // send an update to Bot channel
+                    String chatId = getChatId(ctx.update());
+                    String channelMsg = String.format("User %s (%s) requested stats for %s via /total",
+                            translateName(ctx.update().getMessage().getChat()), chatId, "Total");
+                    silent.send(channelMsg, CHANNEL_ID);
                 })
                 .build();
     }

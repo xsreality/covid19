@@ -129,12 +129,14 @@ public class TelegramUtils {
             String statText = String.format("\n<b>%s</b>\n" +
                             "<pre>\n" +
                             "Total cases  : (↑%s) %s\n" +
+                            "Active       : (↑%s) %s\n" +
                             "Recovered    : (↑%s) %s\n" +
                             "Deaths       : (↑%s) %s\n" +
-                            "Doubling rate: %s day(s)\n" +
+                            "Doubling rate: %s days\n" +
                             "</pre>\n",
                     delta.getState(),
                     nonNull(daily) ? daily.getDeltaConfirmed() : "", delta.getCurrentConfirmed(),
+                    nonNull(daily) ? daily.getDeltaConfirmed() - daily.getDeltaRecovered() - daily.getDeltaDeaths() : "", delta.getCurrentConfirmed() - delta.getCurrentRecovered() - delta.getCurrentDeaths(),
                     nonNull(daily) ? daily.getDeltaRecovered() : "", delta.getCurrentRecovered(),
                     nonNull(daily) ? daily.getDeltaDeaths() : "", delta.getCurrentDeaths(),
                     doublingRates.get(delta.getState()));

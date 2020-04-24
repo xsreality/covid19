@@ -210,6 +210,12 @@ public class StatsAlertConsumerConfig {
             sendTelegramAlert(covid19Bot, request.getChatId(), buildStateSummary(true), null, true);
             return;
         }
+        if ("Yesterday".equalsIgnoreCase(request.getState())) {
+            DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy").withZone(of("UTC"));
+            String yesterday = dateTimeFormatter.format(Instant.now().minus(1, DAYS));
+            sendTelegramAlert(covid19Bot, request.getChatId(), buildSpecificDateSummary(yesterday), null, true);
+            return;
+        }
 
         DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy").withZone(of("UTC"));
         String yesterday = dateTimeFormatter.format(Instant.now().minus(1, DAYS));
@@ -252,5 +258,14 @@ public class StatsAlertConsumerConfig {
         String lastUpdated = sortedStats.get(0).getLastUpdatedTime();
 
         return buildStateSummaryAlertText(sortedStats, lastUpdated, daily);
+    }
+
+    private String buildSpecificDateSummary(String date) {
+        final List<StatewiseDelta> stats = stateStores.dailyCountFor(date);
+        stats.sort((o1, o2) -> (int) (o2.getDeltaConfirmed() - o1.getDeltaConfirmed()));
+
+        String lastUpdated = stats.get(0).getLastUpdatedTime();
+
+        return buildStateSummaryAlertText(stats, lastUpdated, true);
     }
 }

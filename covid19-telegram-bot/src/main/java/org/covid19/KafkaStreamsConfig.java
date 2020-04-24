@@ -100,6 +100,14 @@ public class KafkaStreamsConfig {
     }
 
     @Bean
+    public KTable<StateAndDate, StatewiseDelta> dailyCountTable(StreamsBuilder streamsBuilder) {
+        return streamsBuilder.table("daily-states-count",
+                Materialized.<StateAndDate, StatewiseDelta, KeyValueStore<Bytes, byte[]>>as(
+                        Stores.inMemoryKeyValueStore("daily-states-count-inmemory").name())
+                        .withKeySerde(new StateAndDateSerde()).withValueSerde(new StatewiseDeltaSerde()).withCachingDisabled());
+    }
+
+    @Bean
     public KStream<String, PatientAndMessage> individualPatientAlerts(StreamsBuilder kStreamBuilder) {
         final KStream<String, PatientAndMessage> alerts = kStreamBuilder.stream("send-alerts",
                 Consumed.with(stringSerde, patientAndMessageSerde));

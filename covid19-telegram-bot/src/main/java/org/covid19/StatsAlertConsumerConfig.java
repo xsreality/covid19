@@ -203,7 +203,17 @@ public class StatsAlertConsumerConfig {
             containerFactory = "userRequestsKafkaListenerContainerFactory")
     public void listenForUserRequests(@Payload UserRequest request) {
         if ("Summary".equalsIgnoreCase(request.getState())) {
-            sendTelegramAlert(covid19Bot, request.getChatId(), buildStateSummary(), null, true);
+            sendTelegramAlert(covid19Bot, request.getChatId(), buildStateSummary(false), null, true);
+            return;
+        }
+        if ("Today".equalsIgnoreCase(request.getState())) {
+            sendTelegramAlert(covid19Bot, request.getChatId(), buildStateSummary(true), null, true);
+            return;
+        }
+        if ("Yesterday".equalsIgnoreCase(request.getState())) {
+            DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy").withZone(of("UTC"));
+            String yesterday = dateTimeFormatter.format(Instant.now().minus(1, DAYS));
+            sendTelegramAlert(covid19Bot, request.getChatId(), buildSpecificDateSummary(yesterday), null, true);
             return;
         }
 
@@ -227,22 +237,35 @@ public class StatsAlertConsumerConfig {
 
     @Scheduled(cron = "0 20 4,8,12,16,18 * * ?")
     public void sendSummaryUpdates() {
-        String text = buildStateSummary();
+        String text = buildStateSummary(false);
 
         LOG.info("summary text {}", text);
         fireStatewiseTelegramAlert(covid19Bot, text);
     }
 
-    private String buildStateSummary() {
+    private String buildStateSummary(boolean daily) {
         final KeyValueIterator<String, StatewiseDelta> stats = stateStores.dailyStats();
 
         List<StatewiseDelta> sortedStats = new ArrayList<>();
-        StatewiseDelta total = new StatewiseDelta();
+
         stats.forEachRemaining(stat -> sortedStats.add(stat.value));
-        sortedStats.sort((o1, o2) -> (int) (o2.getCurrentConfirmed() - o1.getCurrentConfirmed()));
+        if (daily) {
+            sortedStats.sort((o1, o2) -> (int) (o2.getDeltaConfirmed() - o1.getDeltaConfirmed()));
+        } else {
+            sortedStats.sort((o1, o2) -> (int) (o2.getCurrentConfirmed() - o1.getCurrentConfirmed()));
+        }
 
         String lastUpdated = sortedStats.get(0).getLastUpdatedTime();
 
-        return buildStateSummaryAlertText(sortedStats, total, lastUpdated);
+        return buildStateSummaryAlertText(sortedStats, lastUpdated, daily);
+    }
+
+    private String buildSpecificDateSummary(String date) {
+        final List<StatewiseDelta> stats = stateStores.dailyCountFor(date);
+        stats.sort((o1, o2) -> (int) (o2.getDeltaConfirmed() - o1.getDeltaConfirmed()));
+
+        String lastUpdated = stats.get(0).getLastUpdatedTime();
+
+        return buildStateSummaryAlertText(stats, lastUpdated, true);
     }
 }

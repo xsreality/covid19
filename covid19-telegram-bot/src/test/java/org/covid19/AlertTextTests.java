@@ -64,9 +64,10 @@ public class AlertTextTests {
         final String expectedSummaryBlock = "\n<b>Total</b>\n" +
                 "<pre>\n" +
                 "Total cases  : (↑15) 5341\n" +
+                "Active       : (↑2) 4729\n" +
                 "Recovered    : (↑9) 455\n" +
                 "Deaths       : (↑4) 157\n" +
-                "Doubling rate: 250 day(s)\n" +
+                "Doubling rate: 250 days\n" +
                 "</pre>\n";
         AtomicReference<String> actualSummaryBlock = new AtomicReference<>("");
 
@@ -89,25 +90,28 @@ public class AlertTextTests {
                 "<b>Assam</b>\n" +
                 "<pre>\n" +
                 "Total cases  : (↑1) 28\n" +
+                "Active       : (↑1) 28\n" +
                 "Recovered    : (↑0) 0\n" +
                 "Deaths       : (↑0) 0\n" +
-                "Doubling rate: 19.44 day(s)\n" +
+                "Doubling rate: 19.44 days\n" +
                 "</pre>\n" +
                 "\n" +
                 "<b>Himachal Pradesh</b>\n" +
                 "<pre>\n" +
                 "Total cases  : (↑9) 27\n" +
+                "Active       : (↑9) 24\n" +
                 "Recovered    : (↑0) 1\n" +
                 "Deaths       : (↑0) 2\n" +
-                "Doubling rate: 2.10 day(s)\n" +
+                "Doubling rate: 2.10 days\n" +
                 "</pre>\n" +
                 "\n" +
                 "<b>Total</b>\n" +
                 "<pre>\n" +
                 "Total cases  : (↑31) 5341\n" +
+                "Active       : (↑20) 4729\n" +
                 "Recovered    : (↑8) 455\n" +
                 "Deaths       : (↑3) 157\n" +
-                "Doubling rate: 116 day(s)\n" +
+                "Doubling rate: 116 days\n" +
                 "</pre>\n";
 
         String lastUpdated = "April 08, 12:04 AM";

@@ -10,9 +10,10 @@ To subscribe, just send the command `/start`. To unsubscribe, send the command `
 
 ## New Features
 
-1. All updates carry news sources (links to State Govt / ANI tweets).
-2. Updates include `Doubling rate` based on previous day statistics.
-3. New commands: `/today`, `/summary` and `/total`. See below for more details.
+1. Testing data is included in every on-demand update if available. This includes tests done, positive, negative and positivity rate.
+2. All updates carry news sources (links to State Govt / ANI tweets).
+3. Updates include `Doubling rate` based on previous day statistics.
+4. New commands: `/today`, `/summary` and `/total`. See below for more details.
 
 Below is an example of an alert sent by the bot:
 
@@ -26,16 +27,6 @@ updating the patient information using official and unofficial (social media etc
 tries to capture these updates and sends alerts that links to previous alert sent for the same patient (if any).
 This helps you see the progress a patient makes (like recovered or deceased). Alerts are only sent
 if the update is significant. Currently this means either changes in status or notes.
-
-## Architecture
-
-### Individual Patient Updates
-
-![Kafka Streams Individual Patient Updates](https://i.ibb.co/MPZJjB3/Covid19-India-Alerts-3.png "Kafka Streams Individual Patient Updates")
-
-### Cumulative + Delta + Daily Increase Updates
-
-![Kafka Streams Architecture](https://i.ibb.co/Zd0Ng7F/Covid19-India-Alerts-4.png "Covid19 Kafka Streams Architecture")
 
 ## Telegram Commands
 
@@ -85,7 +76,17 @@ You should get back the cumulative statistics of the chosen state at that point 
 
 ![Telegram command /stats state summary](https://i.ibb.co/q1KdWc2/Screenshot-20200420-191310-01.jpg "Telegram command /stats state summary")
 
-### Python Importer
+## Architecture
+
+### Individual Patient Updates
+
+![Kafka Streams Individual Patient Updates](https://i.ibb.co/MPZJjB3/Covid19-India-Alerts-3.png "Kafka Streams Individual Patient Updates")
+
+### Cumulative + Delta + Daily Increase Updates
+
+![Kafka Streams Architecture](https://i.ibb.co/Zd0Ng7F/Covid19-India-Alerts-4.png "Covid19 Kafka Streams Architecture")
+
+## Python Importer
 
 The Python script that imports the Covid19India API is available here: https://github.com/xsreality/covid19-patient-importer
 

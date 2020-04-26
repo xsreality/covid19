@@ -12,12 +12,18 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.kafka.config.StreamsBuilderFactoryBean;
 
+import java.time.Instant;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import lombok.extern.slf4j.Slf4j;
+
+import static java.time.ZoneId.of;
+import static java.time.temporal.ChronoUnit.DAYS;
+import static java.util.Objects.isNull;
 
 @Slf4j
 @Configuration
@@ -28,8 +34,10 @@ public class StateStoresManager {
     private ReadOnlyKeyValueStore<String, String> newsSourcesStore;
     private ReadOnlyKeyValueStore<StateAndDate, String> doublingRateStore;
     private ReadOnlyKeyValueStore<StateAndDate, StatewiseDelta> dailyCountStore;
+    private ReadOnlyKeyValueStore<StateAndDate, StatewiseTestData> stateTestStore;
 
     private KafkaListenerEndpointRegistry registry;
+    DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy").withZone(of("UTC"));
 
     public StateStoresManager(@SuppressWarnings("SpringJavaInjectionPointsAutowiringInspection") KafkaListenerEndpointRegistry registry) {
         this.registry = registry;
@@ -53,7 +61,8 @@ public class StateStoresManager {
                                     KTable<String, UserPrefs> userPrefsTable,
                                     KTable<String, String> newsSourcesTable,
                                     KTable<StateAndDate, String> doublingRateTable,
-                                    KTable<StateAndDate, StatewiseDelta> dailyCountTable) {
+                                    KTable<StateAndDate, StatewiseDelta> dailyCountTable,
+                                    KTable<StateAndDate, StatewiseTestData> stateTestTable) {
         return args -> {
             latch(fb).await(100, TimeUnit.SECONDS);
             dailyStatsStore = fb.getKafkaStreams().store(dailyStatsTable.queryableStoreName(), QueryableStoreTypes.keyValueStore());
@@ -63,6 +72,7 @@ public class StateStoresManager {
             newsSourcesStore = fb.getKafkaStreams().store(newsSourcesTable.queryableStoreName(), QueryableStoreTypes.keyValueStore());
             doublingRateStore = fb.getKafkaStreams().store(doublingRateTable.queryableStoreName(), QueryableStoreTypes.keyValueStore());
             dailyCountStore = fb.getKafkaStreams().store(dailyCountTable.queryableStoreName(), QueryableStoreTypes.keyValueStore());
+            stateTestStore = fb.getKafkaStreams().store(stateTestTable.queryableStoreName(), QueryableStoreTypes.keyValueStore());
             // start consumers only after state store is ready.
             registry.getListenerContainer("statewiseAlertsConsumer").start();
             registry.getListenerContainer("userRequestsConsumer").start();
@@ -115,5 +125,28 @@ public class StateStoresManager {
             }
         }
         return counts;
+    }
+
+    public StatewiseTestData testDataFor(String state, String date) {
+        return stateTestStore.get(new StateAndDate(date, state));
+    }
+
+    /**
+     * Iterate through the testing data store from today in reverse chronological order until data
+     * is found within the past 14 days.
+     *
+     * @param state Indian state to search testing data for
+     * @return Testing data
+     */
+    public StatewiseTestData latestAvailableTestDataFor(String state) {
+        StatewiseTestData testData;
+        long deltaDays = 0L;
+        do {
+            testData = testDataFor(state, dateTimeFormatter.format(Instant.now().minus(deltaDays++, DAYS)));
+            if (deltaDays >= 14L) {
+                break; // don't bother beyond 2 weeks
+            }
+        } while (isNull(testData));
+        return testData;
     }
 }

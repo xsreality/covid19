@@ -28,6 +28,7 @@ public class StateStoresManager {
     private ReadOnlyKeyValueStore<String, String> newsSourcesStore;
     private ReadOnlyKeyValueStore<StateAndDate, String> doublingRateStore;
     private ReadOnlyKeyValueStore<StateAndDate, StatewiseDelta> dailyCountStore;
+    private ReadOnlyKeyValueStore<StateAndDate, StatewiseTestData> stateTestStore;
 
     private KafkaListenerEndpointRegistry registry;
 
@@ -53,7 +54,8 @@ public class StateStoresManager {
                                     KTable<String, UserPrefs> userPrefsTable,
                                     KTable<String, String> newsSourcesTable,
                                     KTable<StateAndDate, String> doublingRateTable,
-                                    KTable<StateAndDate, StatewiseDelta> dailyCountTable) {
+                                    KTable<StateAndDate, StatewiseDelta> dailyCountTable,
+                                    KTable<StateAndDate, StatewiseTestData> stateTestTable) {
         return args -> {
             latch(fb).await(100, TimeUnit.SECONDS);
             dailyStatsStore = fb.getKafkaStreams().store(dailyStatsTable.queryableStoreName(), QueryableStoreTypes.keyValueStore());
@@ -63,6 +65,7 @@ public class StateStoresManager {
             newsSourcesStore = fb.getKafkaStreams().store(newsSourcesTable.queryableStoreName(), QueryableStoreTypes.keyValueStore());
             doublingRateStore = fb.getKafkaStreams().store(doublingRateTable.queryableStoreName(), QueryableStoreTypes.keyValueStore());
             dailyCountStore = fb.getKafkaStreams().store(dailyCountTable.queryableStoreName(), QueryableStoreTypes.keyValueStore());
+            stateTestStore = fb.getKafkaStreams().store(stateTestTable.queryableStoreName(), QueryableStoreTypes.keyValueStore());
             // start consumers only after state store is ready.
             registry.getListenerContainer("statewiseAlertsConsumer").start();
             registry.getListenerContainer("userRequestsConsumer").start();
@@ -115,5 +118,9 @@ public class StateStoresManager {
             }
         }
         return counts;
+    }
+
+    public StatewiseTestData testDataFor(String state, String date) {
+        return stateTestStore.get(new StateAndDate(date, state));
     }
 }

@@ -53,7 +53,7 @@ public class KafkaStreamsConfig {
     public KafkaStreamsConfiguration kStreamsConfig() {
         Map<String, Object> kafkaStreamsProps = new HashMap<>(kafkaProperties.buildStreamsProperties());
         kafkaStreamsProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        kafkaStreamsProps.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 6);
+        kafkaStreamsProps.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 8);
         kafkaStreamsProps.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 10 * 1000);
         kafkaStreamsProps.put(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.OPTIMIZE);
         return new KafkaStreamsConfiguration(kafkaStreamsProps);
@@ -105,6 +105,14 @@ public class KafkaStreamsConfig {
                 Materialized.<StateAndDate, StatewiseDelta, KeyValueStore<Bytes, byte[]>>as(
                         Stores.inMemoryKeyValueStore("daily-states-count-inmemory").name())
                         .withKeySerde(new StateAndDateSerde()).withValueSerde(new StatewiseDeltaSerde()).withCachingDisabled());
+    }
+
+    @Bean
+    public KTable<StateAndDate, StatewiseTestData> stateTestTable(StreamsBuilder streamsBuilder) {
+        return streamsBuilder.table("statewise-test-data",
+                Materialized.<StateAndDate, StatewiseTestData, KeyValueStore<Bytes, byte[]>>as(
+                        Stores.persistentKeyValueStore("statewise-test-data-persistent").name())
+                        .withKeySerde(new StateAndDateSerde()).withValueSerde(new StatewiseTestDataSerde()).withCachingDisabled());
     }
 
     @Bean

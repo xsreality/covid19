@@ -15,8 +15,8 @@ public class StatewiseStatsSerde extends Serdes.WrapperSerde<StatewiseStats> {
             private Gson gson = new GsonBuilder().serializeNulls().disableInnerClassSerialization().create();
 
             @Override
-            public byte[] serialize(String s, StatewiseStats StatewiseStats) {
-                return gson.toJson(StatewiseStats).getBytes(StandardCharsets.UTF_8);
+            public byte[] serialize(String s, StatewiseStats statewiseStats) {
+                return gson.toJson(statewiseStats).getBytes(StandardCharsets.UTF_8);
             }
         }, new Deserializer<StatewiseStats>() {
             private Gson gson = new Gson();

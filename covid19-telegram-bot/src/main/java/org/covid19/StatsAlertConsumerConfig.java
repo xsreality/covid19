@@ -28,7 +28,9 @@ import lombok.extern.slf4j.Slf4j;
 import static io.confluent.kafka.serializers.KafkaJsonDeserializerConfig.JSON_VALUE_TYPE;
 import static java.time.ZoneId.of;
 import static java.time.temporal.ChronoUnit.DAYS;
+import static java.util.Collections.emptyMap;
 import static java.util.Collections.singletonList;
+import static java.util.Objects.nonNull;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.CLIENT_ID_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
@@ -147,7 +149,7 @@ public class StatsAlertConsumerConfig {
         if (readyToSend.isEmpty()) {
             return; // no useful update
         }
-        String alertTextForAllStates = buildStatewiseAlertText(friendlyTime(lastUpdated), readyToSend, dailyIncrements, doublingRates);
+        String alertTextForAllStates = buildStatewiseAlertText(friendlyTime(lastUpdated), readyToSend, dailyIncrements, emptyMap(), doublingRates);
 
         final KeyValueIterator<String, UserPrefs> userPrefsIterator = stateStores.userPrefs();
         userPrefsIterator.forEachRemaining(keyValue -> {
@@ -193,7 +195,7 @@ public class StatsAlertConsumerConfig {
                 return; // no useful update for this user
             }
             LOG.info("Update is relevant for user {}", userPref.getUserId());
-            String alertTextForUserStates = buildStatewiseAlertText(friendlyTime(lastUpdatedUserState), userStatesDelta, userStatesDaily, userDoublingRates);
+            String alertTextForUserStates = buildStatewiseAlertText(friendlyTime(lastUpdatedUserState), userStatesDelta, userStatesDaily, emptyMap(), userDoublingRates);
             sendTelegramAlert(covid19Bot, userPref.getUserId(), alertTextForUserStates, null, true);
         });
     }
@@ -219,17 +221,29 @@ public class StatsAlertConsumerConfig {
 
         DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy").withZone(of("UTC"));
         String yesterday = dateTimeFormatter.format(Instant.now().minus(1, DAYS));
+        String today = dateTimeFormatter.format(Instant.now());
 
         StatewiseDelta delta = stateStores.deltaStatsForState(request.getState());
         StatewiseDelta daily = stateStores.dailyStatsForState(request.getState());
         String newsSource = stateStores.newsSourceFor(request.getState());
+
+        Map<String, StatewiseTestData> testing = new HashMap<>();
+        final StatewiseTestData statewiseTestData = stateStores.testDataFor(request.getState(), today);
+        if (nonNull(statewiseTestData)) {
+            LOG.info("Found testing data for {} as {}", request.getState(), statewiseTestData);
+            testing.put(request.getState(), statewiseTestData);
+        }
+
         Map<String, String> doublingRates = new HashMap<>();
         doublingRates.put(request.getState(), stateStores.doublingRateFor(request.getState(), yesterday));
 
         AtomicReference<String> alertText = new AtomicReference<>("");
-        buildSummaryAlertBlock(alertText, singletonList(delta), singletonList(daily), doublingRates);
+        buildSummaryAlertBlock(alertText, singletonList(delta), singletonList(daily), testing, doublingRates);
         if (!TOTAL.equalsIgnoreCase(request.getState())) {
             alertText.accumulateAndGet(newsSource, (current, update) -> current + "Source: " + update);
+        }
+        if (!testing.isEmpty() && testing.containsKey(request.getState())) {
+            alertText.accumulateAndGet(testing.get(request.getState()).getSource(), (current, update) -> current + "\n\nTesting data source: " + update);
         }
 
         sendTelegramAlert(covid19Bot, request.getChatId(), alertText.get(), null, true);

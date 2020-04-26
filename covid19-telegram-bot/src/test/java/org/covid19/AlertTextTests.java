@@ -91,9 +91,9 @@ public class AlertTextTests {
                 "Deaths       : (↑4) 157\n" +
                 "Doubling rate: 250 days\n" +
                 "</pre>\n" +
-                "<pre>\n" +
-                "Total tested   : 53166\n" +
-                "Positive       : 1621\n" +
+                "<pre>" +
+                "Total tested   : (↑19462) 53166\n" +
+                "Positive       : (↑38) 1621\n" +
                 "Negative       : 51161\n" +
                 "Unconfirmed    : 384\n" +
                 "Positivity rate: 3.05%\n" +
@@ -105,7 +105,7 @@ public class AlertTextTests {
         Map<String, String> doublingRates = new HashMap<>();
         doublingRates.put("Delhi", "250");
         Map<String, StatewiseTestData> testing = new HashMap<>();
-        testing.put("Delhi", new StatewiseTestData("51161", "", "", "", "", "1621", "", "", "Delhi", "", "", "", "", "53166", "384", ""));
+        testing.put("Delhi", new StatewiseTestData("51161", "", "", "", "", "1621", "", "", "Delhi", "", "", "", "", "53166", "384", "", "19462", "38"));
         buildSummaryAlertBlock(actualSummaryBlock, deltas, dailies, testing, doublingRates);
 
         assertEquals(expectedSummaryBlock, actualSummaryBlock.get(), "Summary block is not structured correctly!");

@@ -28,4 +28,6 @@ public class StatewiseTestData {
     @SerializedName("totaltested") private String totalTested;
     private String unconfirmed;
     private String updatedon;
+    @SerializedName("testreportedtoday") private String testReportedToday;
+    @SerializedName("positivereportedtoday") private String positiveReportedToday;
 }

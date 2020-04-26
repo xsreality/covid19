@@ -13,7 +13,6 @@ import lombok.extern.slf4j.Slf4j;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
 import static java.lang.Long.parseLong;
-import static java.lang.Math.round;
 import static java.util.Objects.isNull;
 import static java.util.Objects.nonNull;
 import static org.covid19.Utils.friendlyTime;
@@ -152,14 +151,15 @@ public class TelegramUtils {
                 StatewiseTestData testData = testing.get(delta.getState());
                 String positivityRate = calculatePositivityRate(testData);
                 String testingText = String.format("<pre>" +
-                                "Total tested   : %s\n" +
-                                "Positive       : %s\n" +
+                                "Total tested   : (↑%s) %s\n" +
+                                "Positive       : (↑%s) %s\n" +
                                 "Negative       : %s\n" +
                                 "Unconfirmed    : %s\n" +
                                 "Positivity rate: %s%%\n" +
                                 "</pre>\n",
-                        testData.getTotalTested(), testData.getPositive(), testData.getNegative(),
-                        testData.getUnconfirmed(), positivityRate);
+                        testData.getTestReportedToday().isEmpty() ? "?" : testData.getTestReportedToday(), testData.getTotalTested(),
+                        testData.getPositiveReportedToday().isEmpty() ? "?" : testData.getPositiveReportedToday(), testData.getPositive(),
+                        testData.getNegative(), testData.getUnconfirmed(), positivityRate);
                 updateText.accumulateAndGet(testingText, (current, update) -> current + update);
             }
         });

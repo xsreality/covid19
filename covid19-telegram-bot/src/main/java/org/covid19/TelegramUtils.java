@@ -156,10 +156,13 @@ public class TelegramUtils {
                                 "Negative       : %s\n" +
                                 "Unconfirmed    : %s\n" +
                                 "Positivity rate: %s%%\n" +
+                                "Last updated   : %s\n" +
                                 "</pre>\n",
                         testData.getTestReportedToday().isEmpty() ? "?" : testData.getTestReportedToday(), testData.getTotalTested(),
                         testData.getPositiveReportedToday().isEmpty() ? "?" : testData.getPositiveReportedToday(), testData.getPositive(),
-                        testData.getNegative(), testData.getUnconfirmed(), positivityRate);
+                        isNull(testData.getNegative()) ? "N/A" : testData.getNegative(),
+                        isNull(testData.getUnconfirmed()) ? "N/A" : testData.getUnconfirmed(),
+                        positivityRate, testData.getUpdatedon());
                 updateText.accumulateAndGet(testingText, (current, update) -> current + update);
             }
         });

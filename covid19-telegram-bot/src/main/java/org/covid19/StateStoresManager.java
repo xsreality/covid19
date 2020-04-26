@@ -12,12 +12,18 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.kafka.config.StreamsBuilderFactoryBean;
 
+import java.time.Instant;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import lombok.extern.slf4j.Slf4j;
+
+import static java.time.ZoneId.of;
+import static java.time.temporal.ChronoUnit.DAYS;
+import static java.util.Objects.isNull;
 
 @Slf4j
 @Configuration
@@ -31,6 +37,7 @@ public class StateStoresManager {
     private ReadOnlyKeyValueStore<StateAndDate, StatewiseTestData> stateTestStore;
 
     private KafkaListenerEndpointRegistry registry;
+    DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy").withZone(of("UTC"));
 
     public StateStoresManager(@SuppressWarnings("SpringJavaInjectionPointsAutowiringInspection") KafkaListenerEndpointRegistry registry) {
         this.registry = registry;
@@ -122,5 +129,24 @@ public class StateStoresManager {
 
     public StatewiseTestData testDataFor(String state, String date) {
         return stateTestStore.get(new StateAndDate(date, state));
+    }
+
+    /**
+     * Iterate through the testing data store from today in reverse chronological order until data
+     * is found within the past 14 days.
+     *
+     * @param state Indian state to search testing data for
+     * @return Testing data
+     */
+    public StatewiseTestData latestAvailableTestDataFor(String state) {
+        StatewiseTestData testData;
+        long deltaDays = 0L;
+        do {
+            testData = testDataFor(state, dateTimeFormatter.format(Instant.now().minus(deltaDays++, DAYS)));
+            if (deltaDays >= 14L) {
+                break; // don't bother beyond 2 weeks
+            }
+        } while (isNull(testData));
+        return testData;
     }
 }

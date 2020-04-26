@@ -97,6 +97,7 @@ public class AlertTextTests {
                 "Negative       : 51161\n" +
                 "Unconfirmed    : 384\n" +
                 "Positivity rate: 3.05%\n" +
+                "Last updated   : 26/04/2020\n" +
                 "</pre>\n";
         AtomicReference<String> actualSummaryBlock = new AtomicReference<>("");
 
@@ -105,7 +106,7 @@ public class AlertTextTests {
         Map<String, String> doublingRates = new HashMap<>();
         doublingRates.put("Delhi", "250");
         Map<String, StatewiseTestData> testing = new HashMap<>();
-        testing.put("Delhi", new StatewiseTestData("51161", "", "", "", "", "1621", "", "", "Delhi", "", "", "", "", "53166", "384", "", "19462", "38"));
+        testing.put("Delhi", new StatewiseTestData("51161", "", "", "", "", "1621", "", "", "Delhi", "", "", "", "", "53166", "384", "26/04/2020", "19462", "38"));
         buildSummaryAlertBlock(actualSummaryBlock, deltas, dailies, testing, doublingRates);
 
         assertEquals(expectedSummaryBlock, actualSummaryBlock.get(), "Summary block is not structured correctly!");

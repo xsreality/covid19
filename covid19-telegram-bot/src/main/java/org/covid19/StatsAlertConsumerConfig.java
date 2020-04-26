@@ -221,14 +221,13 @@ public class StatsAlertConsumerConfig {
 
         DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy").withZone(of("UTC"));
         String yesterday = dateTimeFormatter.format(Instant.now().minus(1, DAYS));
-        String today = dateTimeFormatter.format(Instant.now());
 
         StatewiseDelta delta = stateStores.deltaStatsForState(request.getState());
         StatewiseDelta daily = stateStores.dailyStatsForState(request.getState());
         String newsSource = stateStores.newsSourceFor(request.getState());
 
         Map<String, StatewiseTestData> testing = new HashMap<>();
-        final StatewiseTestData statewiseTestData = stateStores.testDataFor(request.getState(), today);
+        final StatewiseTestData statewiseTestData = stateStores.latestAvailableTestDataFor(request.getState());
         if (nonNull(statewiseTestData)) {
             LOG.info("Found testing data for {} as {}", request.getState(), statewiseTestData);
             testing.put(request.getState(), statewiseTestData);

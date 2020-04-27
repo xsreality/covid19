@@ -2,6 +2,9 @@ telegram:
   bot.username: covid19_india_alerts_bot
   db.path: /tmp/telegram.db
 
+visualization:
+  url: http://localhost:8403
+
 spring:
   kafka:
     streams:

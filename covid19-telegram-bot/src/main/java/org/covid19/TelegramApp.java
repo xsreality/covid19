@@ -7,12 +7,16 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
+import org.springframework.http.converter.ByteArrayHttpMessageConverter;
+import org.springframework.http.converter.HttpMessageConverter;
+import org.springframework.web.client.RestTemplate;
 import org.telegram.abilitybots.api.db.MapDBContext;
 import org.telegram.telegrambots.ApiContextInitializer;
 import org.telegram.telegrambots.meta.TelegramBotsApi;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import java.io.File;
+import java.util.List;
 
 @SpringBootApplication
 public class TelegramApp implements CommandLineRunner {
@@ -57,5 +61,15 @@ public class TelegramApp implements CommandLineRunner {
                 .make();
 
         return new Covid19Bot(telegramBotToken, telegramBotUsername, new MapDBContext(db), telegramCreatorId, telegramChatId);
+    }
+
+    @Bean
+    public RestTemplate restTemplate(List<HttpMessageConverter<?>> messageConverters) {
+        return new RestTemplate(messageConverters);
+    }
+
+    @Bean
+    public ByteArrayHttpMessageConverter byteArrayHttpMessageConverter() {
+        return new ByteArrayHttpMessageConverter();
     }
 }

@@ -24,6 +24,7 @@ import lombok.extern.slf4j.Slf4j;
 import static java.time.ZoneId.of;
 import static java.time.temporal.ChronoUnit.DAYS;
 import static java.util.Objects.isNull;
+import static org.covid19.visualizations.Visualizer.LAST_SEVEN_DAYS_OVERVIEW;
 
 @Slf4j
 @Configuration
@@ -35,6 +36,7 @@ public class StateStoresManager {
     private ReadOnlyKeyValueStore<StateAndDate, String> doublingRateStore;
     private ReadOnlyKeyValueStore<StateAndDate, StatewiseDelta> dailyCountStore;
     private ReadOnlyKeyValueStore<StateAndDate, StatewiseTestData> stateTestStore;
+    private ReadOnlyKeyValueStore<String, byte[]> visualizationsStore;
 
     private KafkaListenerEndpointRegistry registry;
     DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy").withZone(of("UTC"));
@@ -62,7 +64,8 @@ public class StateStoresManager {
                                     KTable<String, String> newsSourcesTable,
                                     KTable<StateAndDate, String> doublingRateTable,
                                     KTable<StateAndDate, StatewiseDelta> dailyCountTable,
-                                    KTable<StateAndDate, StatewiseTestData> stateTestTable) {
+                                    KTable<StateAndDate, StatewiseTestData> stateTestTable,
+                                    KTable<String, byte[]> visualizationsTable) {
         return args -> {
             latch(fb).await(100, TimeUnit.SECONDS);
             dailyStatsStore = fb.getKafkaStreams().store(dailyStatsTable.queryableStoreName(), QueryableStoreTypes.keyValueStore());
@@ -73,6 +76,7 @@ public class StateStoresManager {
             doublingRateStore = fb.getKafkaStreams().store(doublingRateTable.queryableStoreName(), QueryableStoreTypes.keyValueStore());
             dailyCountStore = fb.getKafkaStreams().store(dailyCountTable.queryableStoreName(), QueryableStoreTypes.keyValueStore());
             stateTestStore = fb.getKafkaStreams().store(stateTestTable.queryableStoreName(), QueryableStoreTypes.keyValueStore());
+            visualizationsStore = fb.getKafkaStreams().store(visualizationsTable.queryableStoreName(), QueryableStoreTypes.keyValueStore());
             // start consumers only after state store is ready.
             registry.getListenerContainer("statewiseAlertsConsumer").start();
             registry.getListenerContainer("userRequestsConsumer").start();
@@ -148,5 +152,9 @@ public class StateStoresManager {
             }
         } while (isNull(testData));
         return testData;
+    }
+
+    public byte[] last7DaysOverview() {
+        return visualizationsStore.get(LAST_SEVEN_DAYS_OVERVIEW);
     }
 }

@@ -16,11 +16,14 @@ import org.telegram.abilitybots.api.objects.Ability;
 import org.telegram.abilitybots.api.objects.Reply;
 import org.telegram.abilitybots.api.objects.ReplyFlow;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
+import org.telegram.telegrambots.meta.api.methods.send.SendPhoto;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
+import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
+import java.io.ByteArrayInputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
@@ -212,6 +215,24 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
                     String message = String.format("User %s (%d) unsubscribed from Covid19 India Patient alerts",
                             translateName(ctx.update().getMessage().getChat()), ctx.user().getId());
                     silent.send(message, CHANNEL_ID);
+                })
+                .build();
+    }
+
+    public Ability image() {
+        return Ability
+                .builder()
+                .name("overview")
+                .privacy(PUBLIC).locality(ALL)
+                .input(0)
+                .action(ctx -> {
+                    byte[] image = this.storesManager.last7DaysOverview();
+                    SendPhoto photo = new SendPhoto().setPhoto("Last 7 days Overview", new ByteArrayInputStream(image)).setChatId(ctx.chatId());
+                    try {
+                        sender.sendPhoto(photo);
+                    } catch (TelegramApiException e) {
+                        e.printStackTrace();
+                    }
                 })
                 .build();
     }

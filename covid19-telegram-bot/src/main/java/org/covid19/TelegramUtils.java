@@ -169,6 +169,9 @@ public class TelegramUtils {
     }
 
     private static String calculatePositivityRate(StatewiseTestData statewiseTestData) {
+        if (statewiseTestData.getPositive().isEmpty() || statewiseTestData.getTotalTested().isEmpty()) {
+            return "0";
+        }
         double positivityRate = 100.0 * parseLong(statewiseTestData.getPositive()) / parseLong(statewiseTestData.getTotalTested());
         return decimalFormatter.format(positivityRate);
     }

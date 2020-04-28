@@ -10,7 +10,7 @@ import java.util.List;
 import java.util.Map;
 
 public class Utils {
-    static <A, B> List<Pair<A, B>> zip(List<A> listA, List<B> listB) {
+    public static <A, B> List<Pair<A, B>> zip(List<A> listA, List<B> listB) {
         if (listA.size() != listB.size()) {
             throw new IllegalArgumentException("Lists must have same size");
         }
@@ -23,12 +23,12 @@ public class Utils {
         return pairList;
     }
 
-    static String friendlyTime(String lastUpdated) {
+    public static String friendlyTime(String lastUpdated) {
         final LocalDateTime localDateTime = LocalDateTime.parse(lastUpdated, DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss"));
         return localDateTime.format(DateTimeFormatter.ofPattern("MMMM dd, hh:mm a"));
     }
 
-    static Map<String, String> initStateCodes() {
+    public static Map<String, String> initStateCodes() {
         Map<String, String> stateCodes = new HashMap<>();
         stateCodes.put("Total", "Total");
         stateCodes.put("Andhra Pradesh", "AP");

@@ -1,5 +1,6 @@
 package org.covid19;
 
+import org.covid19.bot.Covid19Bot;
 import org.mapdb.DB;
 import org.mapdb.DBMaker;
 import org.springframework.beans.factory.annotation.Value;

@@ -18,8 +18,8 @@ public class ChartRequest {
 
     public ChartRequest(Chart chart) {
         this.backgroundColor = "transparent";
-        this.width = "500";
-        this.height = "300";
+        this.width = "750";
+        this.height = "450";
         this.format = "png";
         this.chart = chart;
     }

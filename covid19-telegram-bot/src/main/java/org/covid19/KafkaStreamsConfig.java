@@ -14,6 +14,7 @@ import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
+import org.covid19.bot.Covid19Bot;
 import org.springframework.boot.autoconfigure.kafka.KafkaProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -28,8 +29,8 @@ import lombok.extern.slf4j.Slf4j;
 
 import static java.util.Objects.isNull;
 import static java.util.Objects.nonNull;
-import static org.covid19.TelegramUtils.buildAlertText;
-import static org.covid19.TelegramUtils.sendTelegramAlert;
+import static org.covid19.bot.BotUtils.buildAlertText;
+import static org.covid19.bot.BotUtils.sendTelegramAlert;
 
 @Configuration
 @EnableKafkaStreams

@@ -3,6 +3,7 @@ package org.covid19;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.covid19.bot.Covid19Bot;
 import org.springframework.boot.autoconfigure.kafka.KafkaProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -35,12 +36,12 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.CLIENT_ID_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
-import static org.covid19.TelegramUtils.buildStateSummaryAlertText;
-import static org.covid19.TelegramUtils.buildStatewiseAlertText;
-import static org.covid19.TelegramUtils.buildSummaryAlertBlock;
-import static org.covid19.TelegramUtils.fireStatewiseTelegramAlert;
-import static org.covid19.TelegramUtils.sendTelegramAlert;
 import static org.covid19.Utils.friendlyTime;
+import static org.covid19.bot.BotUtils.buildStateSummaryAlertText;
+import static org.covid19.bot.BotUtils.buildStatewiseAlertText;
+import static org.covid19.bot.BotUtils.buildSummaryAlertBlock;
+import static org.covid19.bot.BotUtils.fireStatewiseTelegramAlert;
+import static org.covid19.bot.BotUtils.sendTelegramAlert;
 
 @EnableKafka
 @Configuration

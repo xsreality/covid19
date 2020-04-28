@@ -24,7 +24,9 @@ import lombok.extern.slf4j.Slf4j;
 import static java.time.ZoneId.of;
 import static java.time.temporal.ChronoUnit.DAYS;
 import static java.util.Objects.isNull;
+import static org.covid19.visualizations.Visualizer.DOUBLING_RATE;
 import static org.covid19.visualizations.Visualizer.LAST_SEVEN_DAYS_OVERVIEW;
+import static org.covid19.visualizations.Visualizer.LAST_TWO_WEEKS_TOTAL;
 
 @Slf4j
 @Configuration
@@ -154,7 +156,15 @@ public class StateStoresManager {
         return testData;
     }
 
-    public byte[] last7DaysOverview() {
+    public byte[] lastWeekOverview() {
         return visualizationsStore.get(LAST_SEVEN_DAYS_OVERVIEW);
+    }
+
+    public byte[] lastTwoWeeksTotal() {
+        return visualizationsStore.get(LAST_TWO_WEEKS_TOTAL);
+    }
+
+    public byte[] doublingRate() {
+        return visualizationsStore.get(DOUBLING_RATE);
     }
 }

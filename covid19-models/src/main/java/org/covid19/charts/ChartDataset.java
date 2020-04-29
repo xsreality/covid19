@@ -19,6 +19,7 @@ public class ChartDataset {
     private String backgroundColor;
     private String borderWidth;
     private String barThickness;
+    private String pointRadius;
 
     public ChartDataset(String label, List<Long> data, String borderColor) {
         this.label = label;
@@ -28,5 +29,6 @@ public class ChartDataset {
         this.backgroundColor = this.borderColor;
         this.borderWidth = "1";
         this.barThickness = "15";
+        this.pointRadius = "0";
     }
 }

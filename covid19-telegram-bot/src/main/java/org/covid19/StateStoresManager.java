@@ -25,8 +25,10 @@ import static java.time.ZoneId.of;
 import static java.time.temporal.ChronoUnit.DAYS;
 import static java.util.Objects.isNull;
 import static org.covid19.visualizations.Visualizer.DOUBLING_RATE;
+import static org.covid19.visualizations.Visualizer.HISTORY_TREND;
 import static org.covid19.visualizations.Visualizer.LAST_SEVEN_DAYS_OVERVIEW;
 import static org.covid19.visualizations.Visualizer.LAST_TWO_WEEKS_TOTAL;
+import static org.covid19.visualizations.Visualizer.STATES_TREND;
 
 @Slf4j
 @Configuration
@@ -117,6 +119,10 @@ public class StateStoresManager {
         return doublingRateStore.get(new StateAndDate(date, state));
     }
 
+    public KeyValueIterator<StateAndDate, StatewiseDelta> dailyCount() {
+        return dailyCountStore.all();
+    }
+
     public StatewiseDelta dailyCountFor(String state, String date) {
         return dailyCountStore.get(new StateAndDate(date, state));
     }
@@ -166,5 +172,13 @@ public class StateStoresManager {
 
     public byte[] doublingRate() {
         return visualizationsStore.get(DOUBLING_RATE);
+    }
+
+    public byte[] statesTrend() {
+        return visualizationsStore.get(STATES_TREND);
+    }
+
+    public byte[] historyTrend() {
+        return visualizationsStore.get(HISTORY_TREND);
     }
 }

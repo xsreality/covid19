@@ -28,9 +28,9 @@ public class VisualizationService {
         this.restTemplate = restTemplate;
     }
 
-    public String buildVisualizationRequest(String type, List<String> labels, List<ChartDataset> datasets) {
+    public String buildVisualizationRequest(String type, List<String> labels, List<ChartDataset> datasets, boolean displayLabels) {
         ChartData chartData = new ChartData(labels, datasets);
-        Chart chart = new Chart(type, chartData);
+        Chart chart = new Chart(type, chartData, displayLabels);
         ChartRequest chartRequest = new ChartRequest(chart);
         return new Gson().toJson(chartRequest, ChartRequest.class);
     }

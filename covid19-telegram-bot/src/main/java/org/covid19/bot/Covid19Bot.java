@@ -253,6 +253,8 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
                 .next(replyWithDailyChart())
                 .next(replyWithTotalChart())
                 .next(replyWithDoublingRateChart())
+                .next(replyWithStatesTrendChart())
+                .next(replyWithHistoryTrendChart())
                 .build();
     }
 
@@ -270,6 +272,11 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
 
         row = new ArrayList<>();
         row.add(new InlineKeyboardButton().setText("Doubling Rate").setCallbackData("Doubling Rate"));
+        row.add(new InlineKeyboardButton().setText("Top 5 States Trend").setCallbackData("States Trend"));
+        keyboard.add(row);
+
+        row = new ArrayList<>();
+        row.add(new InlineKeyboardButton().setText("History Trend").setCallbackData("History Trend"));
         keyboard.add(row);
 
         markup.setKeyboard(keyboard);
@@ -340,13 +347,61 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
                 sender.sendPhoto(photo);
 
                 // update on Bot channel
-                String message = String.format("User %s (%d) requested Total chart",
+                String message = String.format("User %s (%d) requested Doubling Rate chart",
                         translateName(upd.getCallbackQuery().getMessage().getChat()), upd.getCallbackQuery().getMessage().getChatId());
                 silent.send(message, CHANNEL_ID);
             } catch (TelegramApiException e) {
                 LOG.error("Error sending chart", e);
             }
         }, isCallbackOrMessage("Doubling Rate"));
+    }
+
+    private Reply replyWithStatesTrendChart() {
+        return Reply.of(upd -> {
+            byte[] image = this.storesManager.statesTrend();
+            SendPhoto photo = new SendPhoto().setPhoto("States Trend", new ByteArrayInputStream(image)).setChatId(getChatId(upd));
+            try {
+                // remove the inline keyboard
+                DeleteMessage msg = new DeleteMessage();
+                msg.setChatId(getChatId(upd));
+                msg.setMessageId(upd.getCallbackQuery().getMessage().getMessageId());
+                silent.execute(msg);
+
+                // send the visualization
+                sender.sendPhoto(photo);
+
+                // update on Bot channel
+                String message = String.format("User %s (%d) requested States Trend chart",
+                        translateName(upd.getCallbackQuery().getMessage().getChat()), upd.getCallbackQuery().getMessage().getChatId());
+                silent.send(message, CHANNEL_ID);
+            } catch (TelegramApiException e) {
+                LOG.error("Error sending chart", e);
+            }
+        }, isCallbackOrMessage("States Trend"));
+    }
+
+    private Reply replyWithHistoryTrendChart() {
+        return Reply.of(upd -> {
+            byte[] image = this.storesManager.historyTrend();
+            SendPhoto photo = new SendPhoto().setPhoto("History Trend", new ByteArrayInputStream(image)).setChatId(getChatId(upd));
+            try {
+                // remove the inline keyboard
+                DeleteMessage msg = new DeleteMessage();
+                msg.setChatId(getChatId(upd));
+                msg.setMessageId(upd.getCallbackQuery().getMessage().getMessageId());
+                silent.execute(msg);
+
+                // send the visualization
+                sender.sendPhoto(photo);
+
+                // update on Bot channel
+                String message = String.format("User %s (%d) requested History Trend chart",
+                        translateName(upd.getCallbackQuery().getMessage().getChat()), upd.getCallbackQuery().getMessage().getChatId());
+                silent.send(message, CHANNEL_ID);
+            } catch (TelegramApiException e) {
+                LOG.error("Error sending chart", e);
+            }
+        }, isCallbackOrMessage("History Trend"));
     }
 
     @SuppressWarnings("unused")
@@ -501,8 +556,17 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
                 .builder().name("refresh").info("Trigger refresh of all charts")
                 .locality(USER).privacy(CREATOR).input(0)
                 .action(ctx -> {
-                    visualizer.dailyAndTotalCharts();
-                    visualizer.doublingRateChart();
+                    try {
+                        visualizer.dailyAndTotalCharts();
+                        Thread.sleep(1000);
+                        visualizer.doublingRateChart();
+                        Thread.sleep(1000);
+                        visualizer.top5StatesTrend();
+                        Thread.sleep(1000);
+                        visualizer.historyTrend();
+                    } catch (InterruptedException e) {
+                        // ignore
+                    }
                     silent.send("Refresh of charts triggered", ctx.chatId());
                 })
                 .build();

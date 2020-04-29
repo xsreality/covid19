@@ -14,10 +14,10 @@ public class Chart {
     private ChartData data;
     private ChartOption options;
 
-    public Chart(String type, ChartData data) {
+    public Chart(String type, ChartData data, boolean displayLabels) {
         this.type = type;
         this.data = data;
-        PluginDatalabel datalabel = new PluginDatalabel(true, "end", "#ccc", "3", "end");
+        PluginDatalabel datalabel = new PluginDatalabel(displayLabels, "end", "#ccc", "3", "end");
         this.options = new ChartOption(new ChartPlugin(datalabel));
     }
 }

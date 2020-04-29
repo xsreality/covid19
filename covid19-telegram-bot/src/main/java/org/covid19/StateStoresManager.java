@@ -24,6 +24,11 @@ import lombok.extern.slf4j.Slf4j;
 import static java.time.ZoneId.of;
 import static java.time.temporal.ChronoUnit.DAYS;
 import static java.util.Objects.isNull;
+import static org.covid19.visualizations.Visualizer.DOUBLING_RATE;
+import static org.covid19.visualizations.Visualizer.HISTORY_TREND;
+import static org.covid19.visualizations.Visualizer.LAST_SEVEN_DAYS_OVERVIEW;
+import static org.covid19.visualizations.Visualizer.LAST_TWO_WEEKS_TOTAL;
+import static org.covid19.visualizations.Visualizer.STATES_TREND;
 
 @Slf4j
 @Configuration
@@ -35,6 +40,7 @@ public class StateStoresManager {
     private ReadOnlyKeyValueStore<StateAndDate, String> doublingRateStore;
     private ReadOnlyKeyValueStore<StateAndDate, StatewiseDelta> dailyCountStore;
     private ReadOnlyKeyValueStore<StateAndDate, StatewiseTestData> stateTestStore;
+    private ReadOnlyKeyValueStore<String, byte[]> visualizationsStore;
 
     private KafkaListenerEndpointRegistry registry;
     DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy").withZone(of("UTC"));
@@ -62,7 +68,8 @@ public class StateStoresManager {
                                     KTable<String, String> newsSourcesTable,
                                     KTable<StateAndDate, String> doublingRateTable,
                                     KTable<StateAndDate, StatewiseDelta> dailyCountTable,
-                                    KTable<StateAndDate, StatewiseTestData> stateTestTable) {
+                                    KTable<StateAndDate, StatewiseTestData> stateTestTable,
+                                    KTable<String, byte[]> visualizationsTable) {
         return args -> {
             latch(fb).await(100, TimeUnit.SECONDS);
             dailyStatsStore = fb.getKafkaStreams().store(dailyStatsTable.queryableStoreName(), QueryableStoreTypes.keyValueStore());
@@ -73,6 +80,7 @@ public class StateStoresManager {
             doublingRateStore = fb.getKafkaStreams().store(doublingRateTable.queryableStoreName(), QueryableStoreTypes.keyValueStore());
             dailyCountStore = fb.getKafkaStreams().store(dailyCountTable.queryableStoreName(), QueryableStoreTypes.keyValueStore());
             stateTestStore = fb.getKafkaStreams().store(stateTestTable.queryableStoreName(), QueryableStoreTypes.keyValueStore());
+            visualizationsStore = fb.getKafkaStreams().store(visualizationsTable.queryableStoreName(), QueryableStoreTypes.keyValueStore());
             // start consumers only after state store is ready.
             registry.getListenerContainer("statewiseAlertsConsumer").start();
             registry.getListenerContainer("userRequestsConsumer").start();
@@ -109,6 +117,10 @@ public class StateStoresManager {
 
     public String doublingRateFor(String state, String date) {
         return doublingRateStore.get(new StateAndDate(date, state));
+    }
+
+    public KeyValueIterator<StateAndDate, StatewiseDelta> dailyCount() {
+        return dailyCountStore.all();
     }
 
     public StatewiseDelta dailyCountFor(String state, String date) {
@@ -148,5 +160,25 @@ public class StateStoresManager {
             }
         } while (isNull(testData));
         return testData;
+    }
+
+    public byte[] lastWeekOverview() {
+        return visualizationsStore.get(LAST_SEVEN_DAYS_OVERVIEW);
+    }
+
+    public byte[] lastTwoWeeksTotal() {
+        return visualizationsStore.get(LAST_TWO_WEEKS_TOTAL);
+    }
+
+    public byte[] doublingRate() {
+        return visualizationsStore.get(DOUBLING_RATE);
+    }
+
+    public byte[] statesTrend() {
+        return visualizationsStore.get(STATES_TREND);
+    }
+
+    public byte[] historyTrend() {
+        return visualizationsStore.get(HISTORY_TREND);
     }
 }

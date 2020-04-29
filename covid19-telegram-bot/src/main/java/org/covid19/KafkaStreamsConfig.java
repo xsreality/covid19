@@ -14,6 +14,7 @@ import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
+import org.covid19.bot.Covid19Bot;
 import org.springframework.boot.autoconfigure.kafka.KafkaProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -28,8 +29,8 @@ import lombok.extern.slf4j.Slf4j;
 
 import static java.util.Objects.isNull;
 import static java.util.Objects.nonNull;
-import static org.covid19.TelegramUtils.buildAlertText;
-import static org.covid19.TelegramUtils.sendTelegramAlert;
+import static org.covid19.bot.BotUtils.buildAlertText;
+import static org.covid19.bot.BotUtils.sendTelegramAlert;
 
 @Configuration
 @EnableKafkaStreams
@@ -103,7 +104,7 @@ public class KafkaStreamsConfig {
     public KTable<StateAndDate, StatewiseDelta> dailyCountTable(StreamsBuilder streamsBuilder) {
         return streamsBuilder.table("daily-states-count",
                 Materialized.<StateAndDate, StatewiseDelta, KeyValueStore<Bytes, byte[]>>as(
-                        Stores.inMemoryKeyValueStore("daily-states-count-inmemory").name())
+                        Stores.persistentKeyValueStore("daily-states-count-persistent").name())
                         .withKeySerde(new StateAndDateSerde()).withValueSerde(new StatewiseDeltaSerde()).withCachingDisabled());
     }
 
@@ -113,6 +114,14 @@ public class KafkaStreamsConfig {
                 Materialized.<StateAndDate, StatewiseTestData, KeyValueStore<Bytes, byte[]>>as(
                         Stores.persistentKeyValueStore("statewise-test-data-persistent").name())
                         .withKeySerde(new StateAndDateSerde()).withValueSerde(new StatewiseTestDataSerde()).withCachingDisabled());
+    }
+
+    @Bean
+    public KTable<String, byte[]> visualizationsTable(StreamsBuilder streamsBuilder) {
+        return streamsBuilder.table("visualizations",
+                Materialized.<String, byte[], KeyValueStore<Bytes, byte[]>>as(
+                        Stores.persistentKeyValueStore("visualizations-persistent").name())
+                        .withKeySerde(stringSerde).withValueSerde(Serdes.ByteArray()).withCachingDisabled());
     }
 
     @Bean

@@ -1,5 +1,9 @@
-package org.covid19;
+package org.covid19.bot;
 
+import org.covid19.PatientAndMessage;
+import org.covid19.PatientInfo;
+import org.covid19.StatewiseDelta;
+import org.covid19.StatewiseTestData;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.Chat;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
@@ -20,7 +24,7 @@ import static org.covid19.Utils.initStateCodes;
 import static org.covid19.Utils.zip;
 
 @Slf4j
-public class TelegramUtils {
+public class BotUtils {
     final static Map<String, String> stateCodes;
 
     static {
@@ -29,7 +33,7 @@ public class TelegramUtils {
 
     private static DecimalFormat decimalFormatter = new DecimalFormat("0.00");
 
-    static String buildAlertText(boolean update, PatientAndMessage patientAndMessage) {
+    public static String buildAlertText(boolean update, PatientAndMessage patientAndMessage) {
         PatientInfo patientInfo = patientAndMessage.getPatientInfo();
         String alertText;
         if (update) {
@@ -84,7 +88,7 @@ public class TelegramUtils {
         return alertText;
     }
 
-    static void sendTelegramAlert(Covid19Bot bot, String chatId, String alertText, Integer replyId, boolean notification) {
+    public static void sendTelegramAlert(Covid19Bot bot, String chatId, String alertText, Integer replyId, boolean notification) {
         try {
             Thread.sleep(50);  // to avoid hitting Telegram rate limits
             SendMessage telegramMessage = new SendMessage()
@@ -101,7 +105,7 @@ public class TelegramUtils {
         }
     }
 
-    static String buildStatewiseAlertText(String lastUpdated, List<StatewiseDelta> deltas, List<StatewiseDelta> dailies, Map<String, StatewiseTestData> testing, Map<String, String> doublingRates) {
+    public static String buildStatewiseAlertText(String lastUpdated, List<StatewiseDelta> deltas, List<StatewiseDelta> dailies, Map<String, StatewiseTestData> testing, Map<String, String> doublingRates) {
         AtomicReference<String> alertText = new AtomicReference<>("");
         deltas.forEach(delta -> buildDeltaAlertLine(alertText, delta));
         if (alertText.get().isEmpty() || "\n".equalsIgnoreCase(alertText.get())) {
@@ -114,7 +118,7 @@ public class TelegramUtils {
         return finalText;
     }
 
-    static void fireStatewiseTelegramAlert(Covid19Bot covid19Bot, String alertText) {
+    public static void fireStatewiseTelegramAlert(Covid19Bot covid19Bot, String alertText) {
         if (isNull(alertText) || alertText.isEmpty()) {
             return; // skip sending alert
         }
@@ -125,9 +129,9 @@ public class TelegramUtils {
         });
     }
 
-    static void buildSummaryAlertBlock(AtomicReference<String> updateText, List<StatewiseDelta> deltas,
-                                       List<StatewiseDelta> dailies, Map<String, StatewiseTestData> testing,
-                                       Map<String, String> doublingRates) {
+    public static void buildSummaryAlertBlock(AtomicReference<String> updateText, List<StatewiseDelta> deltas,
+                                              List<StatewiseDelta> dailies, Map<String, StatewiseTestData> testing,
+                                              Map<String, String> doublingRates) {
         zip(deltas, dailies).forEach(pair -> {
             StatewiseDelta delta = pair.getKey();
             StatewiseDelta daily = pair.getValue();
@@ -169,11 +173,14 @@ public class TelegramUtils {
     }
 
     private static String calculatePositivityRate(StatewiseTestData statewiseTestData) {
+        if (statewiseTestData.getPositive().isEmpty() || statewiseTestData.getTotalTested().isEmpty()) {
+            return "0";
+        }
         double positivityRate = 100.0 * parseLong(statewiseTestData.getPositive()) / parseLong(statewiseTestData.getTotalTested());
         return decimalFormatter.format(positivityRate);
     }
 
-    static void buildDeltaAlertLine(AtomicReference<String> updateText, StatewiseDelta delta) {
+    public static void buildDeltaAlertLine(AtomicReference<String> updateText, StatewiseDelta delta) {
         // skip total
         if ("total".equalsIgnoreCase(delta.getState())) {
             return;
@@ -210,7 +217,7 @@ public class TelegramUtils {
         updateText.accumulateAndGet(textLine, (current, update) -> current + update);
     }
 
-    static String buildStateSummaryAlertText(List<StatewiseDelta> sortedStats, String lastUpdated, boolean daily) {
+    public static String buildStateSummaryAlertText(List<StatewiseDelta> sortedStats, String lastUpdated, boolean daily) {
         StatewiseDelta total = new StatewiseDelta();
         String text = String.format("<i>%s</i>\n\n", friendlyTime(lastUpdated));
         text = text.concat("Summary of all affected Indian States\n\n");
@@ -247,7 +254,7 @@ public class TelegramUtils {
         return text;
     }
 
-    static String translateName(Chat chat) {
+    public static String translateName(Chat chat) {
         if (nonNull(chat.getFirstName())) {
             if (nonNull(chat.getLastName())) {
                 return chat.getFirstName() + " " + chat.getLastName();

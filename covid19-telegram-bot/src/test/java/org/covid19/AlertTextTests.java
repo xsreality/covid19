@@ -10,9 +10,9 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static java.util.Collections.emptyMap;
-import static org.covid19.TelegramUtils.buildDeltaAlertLine;
-import static org.covid19.TelegramUtils.buildStatewiseAlertText;
-import static org.covid19.TelegramUtils.buildSummaryAlertBlock;
+import static org.covid19.bot.BotUtils.buildDeltaAlertLine;
+import static org.covid19.bot.BotUtils.buildStatewiseAlertText;
+import static org.covid19.bot.BotUtils.buildSummaryAlertBlock;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class AlertTextTests {

@@ -1,7 +1,11 @@
-package org.covid19;
+package org.covid19.bot;
 
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.covid19.StateStoresManager;
+import org.covid19.UserPrefs;
+import org.covid19.UserRequest;
+import org.covid19.visualizations.Visualizer;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -16,11 +20,15 @@ import org.telegram.abilitybots.api.objects.Ability;
 import org.telegram.abilitybots.api.objects.Reply;
 import org.telegram.abilitybots.api.objects.ReplyFlow;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
+import org.telegram.telegrambots.meta.api.methods.send.SendPhoto;
+import org.telegram.telegrambots.meta.api.methods.updatingmessages.DeleteMessage;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
+import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
+import java.io.ByteArrayInputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
@@ -29,7 +37,7 @@ import java.util.function.Predicate;
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;
-import static org.covid19.TelegramUtils.translateName;
+import static org.covid19.bot.BotUtils.translateName;
 import static org.telegram.abilitybots.api.objects.Flag.MESSAGE;
 import static org.telegram.abilitybots.api.objects.Locality.ALL;
 import static org.telegram.abilitybots.api.objects.Locality.USER;
@@ -76,8 +84,9 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
     private KafkaTemplate<String, UserRequest> userRequestKafkaTemplate;
     private KafkaTemplate<String, UserPrefs> userPrefsKafkaTemplate;
     private StateStoresManager storesManager;
+    private Visualizer visualizer;
 
-    protected Covid19Bot(String botToken, String botUsername, DBContext db, String creatorId, String channelId) {
+    public Covid19Bot(String botToken, String botUsername, DBContext db, String creatorId, String channelId) {
         super(botToken, botUsername, db);
         CHAT_ID = Long.valueOf(creatorId);
         CHANNEL_ID = Long.valueOf(channelId);
@@ -214,6 +223,185 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
                     silent.send(message, CHANNEL_ID);
                 })
                 .build();
+    }
+
+    public Ability charts() {
+        return Ability
+                .builder()
+                .name("overview")
+                .privacy(PUBLIC).locality(ALL)
+                .input(0)
+                .action(ctx -> {
+                    byte[] image = this.storesManager.lastWeekOverview();
+                    SendPhoto photo = new SendPhoto().setPhoto("Last 7 days Overview", new ByteArrayInputStream(image)).setChatId(ctx.chatId());
+                    try {
+                        sender.sendPhoto(photo);
+                    } catch (TelegramApiException e) {
+                        e.printStackTrace();
+                    }
+                })
+                .build();
+    }
+
+    public ReplyFlow requestAnyChartFlow() {
+        return ReplyFlow.builder(db, 90)
+                .action(upd -> {
+                    SendMessage msg = buildChartsSelectionKeyboard(getChatId(upd));
+                    silent.execute(msg);
+                })
+                .onlyIf(isCallbackOrMessage("/charts"))
+                .next(replyWithDailyChart())
+                .next(replyWithTotalChart())
+                .next(replyWithDoublingRateChart())
+                .next(replyWithStatesTrendChart())
+                .next(replyWithHistoryTrendChart())
+                .build();
+    }
+
+    private SendMessage buildChartsSelectionKeyboard(String chatId) {
+        InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
+        SendMessage msg = new SendMessage();
+        msg.setChatId(chatId);
+        msg.setText("Choose a chart");
+
+        List<List<InlineKeyboardButton>> keyboard = new ArrayList<>();
+        List<InlineKeyboardButton> row = new ArrayList<>();
+        row.add(new InlineKeyboardButton().setText("Daily").setCallbackData("Daily"));
+        row.add(new InlineKeyboardButton().setText("Total").setCallbackData("Total"));
+        keyboard.add(row);
+
+        row = new ArrayList<>();
+        row.add(new InlineKeyboardButton().setText("Doubling Rate").setCallbackData("Doubling Rate"));
+        row.add(new InlineKeyboardButton().setText("Top 5 States Trend").setCallbackData("States Trend"));
+        keyboard.add(row);
+
+        row = new ArrayList<>();
+        row.add(new InlineKeyboardButton().setText("History Trend").setCallbackData("History Trend"));
+        keyboard.add(row);
+
+        markup.setKeyboard(keyboard);
+        msg.setReplyMarkup(markup);
+        return msg;
+    }
+
+    private Reply replyWithDailyChart() {
+        return Reply.of(upd -> {
+            byte[] image = this.storesManager.lastWeekOverview();
+            SendPhoto photo = new SendPhoto().setPhoto("Daily", new ByteArrayInputStream(image)).setChatId(getChatId(upd));
+            try {
+                // remove the inline keyboard
+                DeleteMessage msg = new DeleteMessage();
+                msg.setChatId(getChatId(upd));
+                msg.setMessageId(upd.getCallbackQuery().getMessage().getMessageId());
+                silent.execute(msg);
+
+                // send the visualization
+                sender.sendPhoto(photo);
+
+                // update on Bot channel
+                String message = String.format("User %s (%d) requested Daily chart",
+                        translateName(upd.getCallbackQuery().getMessage().getChat()), upd.getCallbackQuery().getMessage().getChatId());
+                silent.send(message, CHANNEL_ID);
+            } catch (TelegramApiException e) {
+                LOG.error("Error sending chart", e);
+            }
+        }, isCallbackOrMessage("Daily"));
+    }
+
+    private Reply replyWithTotalChart() {
+        return Reply.of(upd -> {
+            byte[] image = this.storesManager.lastTwoWeeksTotal();
+            SendPhoto photo = new SendPhoto().setPhoto("Total", new ByteArrayInputStream(image)).setChatId(getChatId(upd));
+            try {
+                // remove the inline keyboard
+                DeleteMessage msg = new DeleteMessage();
+                msg.setChatId(getChatId(upd));
+                msg.setMessageId(upd.getCallbackQuery().getMessage().getMessageId());
+                silent.execute(msg);
+
+                // send the visualization
+                sender.sendPhoto(photo);
+
+                // update on Bot channel
+                String message = String.format("User %s (%d) requested Total chart",
+                        translateName(upd.getCallbackQuery().getMessage().getChat()), upd.getCallbackQuery().getMessage().getChatId());
+                silent.send(message, CHANNEL_ID);
+            } catch (TelegramApiException e) {
+                LOG.error("Error sending chart", e);
+            }
+        }, isCallbackOrMessage("Total"));
+    }
+
+    private Reply replyWithDoublingRateChart() {
+        return Reply.of(upd -> {
+            byte[] image = this.storesManager.doublingRate();
+            SendPhoto photo = new SendPhoto().setPhoto("Doubling Rate", new ByteArrayInputStream(image)).setChatId(getChatId(upd));
+            try {
+                // remove the inline keyboard
+                DeleteMessage msg = new DeleteMessage();
+                msg.setChatId(getChatId(upd));
+                msg.setMessageId(upd.getCallbackQuery().getMessage().getMessageId());
+                silent.execute(msg);
+
+                // send the visualization
+                sender.sendPhoto(photo);
+
+                // update on Bot channel
+                String message = String.format("User %s (%d) requested Doubling Rate chart",
+                        translateName(upd.getCallbackQuery().getMessage().getChat()), upd.getCallbackQuery().getMessage().getChatId());
+                silent.send(message, CHANNEL_ID);
+            } catch (TelegramApiException e) {
+                LOG.error("Error sending chart", e);
+            }
+        }, isCallbackOrMessage("Doubling Rate"));
+    }
+
+    private Reply replyWithStatesTrendChart() {
+        return Reply.of(upd -> {
+            byte[] image = this.storesManager.statesTrend();
+            SendPhoto photo = new SendPhoto().setPhoto("States Trend", new ByteArrayInputStream(image)).setChatId(getChatId(upd));
+            try {
+                // remove the inline keyboard
+                DeleteMessage msg = new DeleteMessage();
+                msg.setChatId(getChatId(upd));
+                msg.setMessageId(upd.getCallbackQuery().getMessage().getMessageId());
+                silent.execute(msg);
+
+                // send the visualization
+                sender.sendPhoto(photo);
+
+                // update on Bot channel
+                String message = String.format("User %s (%d) requested States Trend chart",
+                        translateName(upd.getCallbackQuery().getMessage().getChat()), upd.getCallbackQuery().getMessage().getChatId());
+                silent.send(message, CHANNEL_ID);
+            } catch (TelegramApiException e) {
+                LOG.error("Error sending chart", e);
+            }
+        }, isCallbackOrMessage("States Trend"));
+    }
+
+    private Reply replyWithHistoryTrendChart() {
+        return Reply.of(upd -> {
+            byte[] image = this.storesManager.historyTrend();
+            SendPhoto photo = new SendPhoto().setPhoto("History Trend", new ByteArrayInputStream(image)).setChatId(getChatId(upd));
+            try {
+                // remove the inline keyboard
+                DeleteMessage msg = new DeleteMessage();
+                msg.setChatId(getChatId(upd));
+                msg.setMessageId(upd.getCallbackQuery().getMessage().getMessageId());
+                silent.execute(msg);
+
+                // send the visualization
+                sender.sendPhoto(photo);
+
+                // update on Bot channel
+                String message = String.format("User %s (%d) requested History Trend chart",
+                        translateName(upd.getCallbackQuery().getMessage().getChat()), upd.getCallbackQuery().getMessage().getChatId());
+                silent.send(message, CHANNEL_ID);
+            } catch (TelegramApiException e) {
+                LOG.error("Error sending chart", e);
+            }
+        }, isCallbackOrMessage("History Trend"));
     }
 
     @SuppressWarnings("unused")
@@ -363,6 +551,27 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
                 .build();
     }
 
+    public Ability refresh() {
+        return Ability
+                .builder().name("refresh").info("Trigger refresh of all charts")
+                .locality(USER).privacy(CREATOR).input(0)
+                .action(ctx -> {
+                    try {
+                        visualizer.dailyAndTotalCharts();
+                        Thread.sleep(1000);
+                        visualizer.doublingRateChart();
+                        Thread.sleep(1000);
+                        visualizer.top5StatesTrend();
+                        Thread.sleep(1000);
+                        visualizer.historyTrend();
+                    } catch (InterruptedException e) {
+                        // ignore
+                    }
+                    silent.send("Refresh of charts triggered", ctx.chatId());
+                })
+                .build();
+    }
+
     public List<String> subscribedUsers() {
         return db.getList(SUBSCRIBED_USERS);
     }
@@ -372,6 +581,7 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
         this.appCtx = applicationContext;
 
         this.storesManager = (StateStoresManager) appCtx.getBean("stateStoresManager");
+        this.visualizer = (Visualizer) appCtx.getBean("visualizer");
 
         //noinspection unchecked
         userRequestKafkaTemplate = (KafkaTemplate<String, UserRequest>) appCtx.getBean("userRequestKafkaTemplate");

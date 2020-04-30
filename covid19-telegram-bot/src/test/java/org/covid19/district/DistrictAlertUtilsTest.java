@@ -20,7 +20,7 @@ public class DistrictAlertUtilsTest {
         );
         AtomicReference<String> alertText = new AtomicReference<>();
 
-        String expected = "12 new cases, 1 death, 3 recoveries in Mumbai (Maharashtra)\n";
+        String expected = "12 new cases, 1 death, 3 recoveries in Mumbai\n";
         String actual = buildDistrictwiseAlert(deltas, dailies);
 
         assertEquals(expected, actual);

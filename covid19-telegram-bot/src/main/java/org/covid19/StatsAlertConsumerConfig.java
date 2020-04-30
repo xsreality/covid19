@@ -5,6 +5,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.covid19.bot.Covid19Bot;
 import org.covid19.district.DistrictwiseData;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.kafka.KafkaProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -30,6 +31,7 @@ import lombok.extern.slf4j.Slf4j;
 import static io.confluent.kafka.serializers.KafkaJsonDeserializerConfig.JSON_VALUE_TYPE;
 import static java.time.ZoneId.of;
 import static java.time.temporal.ChronoUnit.DAYS;
+import static java.util.Collections.emptyList;
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.singletonList;
 import static java.util.Objects.nonNull;
@@ -54,6 +56,9 @@ public class StatsAlertConsumerConfig {
     private final Covid19Bot covid19Bot;
     private final StateStoresManager stateStores;
     private static String TOTAL = "Total";
+
+    @Value("${telegram.tester.id}")
+    private String telegramTestUser;
 
     public StatsAlertConsumerConfig(KafkaProperties kafkaProperties, Covid19Bot covid19Bot, StateStoresManager stateStores) {
         this.kafkaProperties = kafkaProperties;
@@ -151,7 +156,11 @@ public class StatsAlertConsumerConfig {
         if (readyToSend.isEmpty()) {
             return; // no useful update
         }
-        String alertTextForAllStates = buildStatewiseAlertText(friendlyTime(lastUpdated), readyToSend, dailyIncrements, emptyMap(), doublingRates);
+        // when alerting for multiple states, never include testing
+        // or district data to avoid too big a message (overload).
+        String alertTextForAllStates = buildStatewiseAlertText(
+                friendlyTime(lastUpdated), readyToSend,
+                dailyIncrements, emptyMap(), doublingRates, emptyList());
 
         final KeyValueIterator<String, UserPrefs> userPrefsIterator = stateStores.userPrefs();
         userPrefsIterator.forEachRemaining(keyValue -> {
@@ -190,7 +199,7 @@ public class StatsAlertConsumerConfig {
                     userHasRelevantUpdate = true;
                     userStatesDelta.add(stateStores.deltaStatsForState(delta.getState()));
                     userStatesDaily.add(stateStores.dailyStatsForState(delta.getState()));
-//                    userDistrictDelta.add(stateStores.deltaStatsForStateAndDistrict(delta.))
+                    userDistrictDelta.addAll(stateStores.districtDeltaStatsFor(delta.getState()));
                     userDoublingRates.put(delta.getState(), stateStores.doublingRateFor(delta.getState(), yesterday));
                 }
             }
@@ -199,7 +208,15 @@ public class StatsAlertConsumerConfig {
                 return; // no useful update for this user
             }
             LOG.info("Update is relevant for user {}", userPref.getUserId());
-            String alertTextForUserStates = buildStatewiseAlertText(friendlyTime(lastUpdatedUserState), userStatesDelta, userStatesDaily, emptyMap(), userDoublingRates);
+
+            String alertTextForUserStates;
+            if (telegramTestUser.equalsIgnoreCase(userPref.getUserId())) {
+                LOG.info("Entering canary mode for district updates...");
+                // send district updates only to creator until confirmed working
+                alertTextForUserStates = buildStatewiseAlertText(friendlyTime(lastUpdatedUserState), userStatesDelta, userStatesDaily, emptyMap(), userDoublingRates, userDistrictDelta);
+            } else {
+                alertTextForUserStates = buildStatewiseAlertText(friendlyTime(lastUpdatedUserState), userStatesDelta, userStatesDaily, emptyMap(), userDoublingRates, emptyList());
+            }
             sendTelegramAlert(covid19Bot, userPref.getUserId(), alertTextForUserStates, null, true);
         });
     }

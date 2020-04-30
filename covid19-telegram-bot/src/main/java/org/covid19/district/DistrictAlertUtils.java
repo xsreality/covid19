@@ -47,7 +47,7 @@ public class DistrictAlertUtils {
                     parseLong(delta.getDeltaRecovered()) == 1L ? "recovery" : "recoveries"));
         }
         if (include) {
-            textLine = textLine.concat(String.format(" in %s (%s)\n", delta.getDistrict(), delta.getState()));
+            textLine = textLine.concat(String.format(" in %s\n", delta.getDistrict()));
         }
         updateText.accumulateAndGet(textLine, (current, update) -> current + update);
 

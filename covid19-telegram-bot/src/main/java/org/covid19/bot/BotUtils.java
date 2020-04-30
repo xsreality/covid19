@@ -4,6 +4,7 @@ import org.covid19.PatientAndMessage;
 import org.covid19.PatientInfo;
 import org.covid19.StatewiseDelta;
 import org.covid19.StatewiseTestData;
+import org.covid19.district.DistrictwiseData;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.Chat;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
@@ -22,6 +23,7 @@ import static java.util.Objects.nonNull;
 import static org.covid19.Utils.friendlyTime;
 import static org.covid19.Utils.initStateCodes;
 import static org.covid19.Utils.zip;
+import static org.covid19.district.DistrictAlertUtils.buildDistrictAlertLine;
 
 @Slf4j
 public class BotUtils {
@@ -105,9 +107,14 @@ public class BotUtils {
         }
     }
 
-    public static String buildStatewiseAlertText(String lastUpdated, List<StatewiseDelta> deltas, List<StatewiseDelta> dailies, Map<String, StatewiseTestData> testing, Map<String, String> doublingRates) {
+    public static String buildStatewiseAlertText(String lastUpdated, List<StatewiseDelta> deltas, List<StatewiseDelta> dailies, Map<String, StatewiseTestData> testing, Map<String, String> doublingRates, List<DistrictwiseData> districtDeltas) {
         AtomicReference<String> alertText = new AtomicReference<>("");
         deltas.forEach(delta -> buildDeltaAlertLine(alertText, delta));
+        if (!districtDeltas.isEmpty()) {
+            String districtTitle = "\n<i>District-wise breakup</i>\n";
+            alertText.accumulateAndGet(districtTitle, (current, update) -> current + update);
+        }
+        districtDeltas.forEach(delta -> buildDistrictAlertLine(alertText, delta));
         if (alertText.get().isEmpty() || "\n".equalsIgnoreCase(alertText.get())) {
             LOG.info("No useful update to alert on. Skipping...");
             return "";

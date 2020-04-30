@@ -1,7 +1,9 @@
 package org.covid19.bot;
 
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.covid19.PatientAndMessage;
 import org.covid19.PatientInfo;
+import org.covid19.StateStoresManager;
 import org.covid19.StatewiseDelta;
 import org.covid19.StatewiseTestData;
 import org.covid19.district.DistrictwiseData;
@@ -10,6 +12,8 @@ import org.telegram.telegrambots.meta.api.objects.Chat;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import java.text.DecimalFormat;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
@@ -18,6 +22,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
 import static java.lang.Long.parseLong;
+import static java.util.Collections.emptyMap;
 import static java.util.Objects.isNull;
 import static java.util.Objects.nonNull;
 import static org.covid19.Utils.friendlyTime;
@@ -119,7 +124,7 @@ public class BotUtils {
             LOG.info("No useful update to alert on. Skipping...");
             return "";
         }
-        buildSummaryAlertBlock(alertText, deltas, dailies, testing, doublingRates);
+        buildSummaryAlertBlock(alertText, deltas, dailies, testing, doublingRates, emptyMap());
         String finalText = String.format("<i>%s</i>\n\n%s", lastUpdated, alertText.get());
         LOG.info("Statewise Alert text generated:\n{}", finalText);
         return finalText;
@@ -138,7 +143,7 @@ public class BotUtils {
 
     public static void buildSummaryAlertBlock(AtomicReference<String> updateText, List<StatewiseDelta> deltas,
                                               List<StatewiseDelta> dailies, Map<String, StatewiseTestData> testing,
-                                              Map<String, String> doublingRates) {
+                                              Map<String, String> doublingRates, Map<String, List<DistrictwiseData>> districtsData) {
         zip(deltas, dailies).forEach(pair -> {
             StatewiseDelta delta = pair.getKey();
             StatewiseDelta daily = pair.getValue();
@@ -176,6 +181,13 @@ public class BotUtils {
                         positivityRate, testData.getUpdatedon());
                 updateText.accumulateAndGet(testingText, (current, update) -> current + update);
             }
+
+            List<DistrictwiseData> districtwiseData = districtsData.getOrDefault(delta.getState(), new ArrayList<>());
+            if (districtwiseData.isEmpty()) {
+                return;
+            }
+            // build district data table
+
         });
     }
 
@@ -272,4 +284,22 @@ public class BotUtils {
         }
         return "";
     }
+
+    public static String buildStateSummary(boolean daily, StateStoresManager stateStores) {
+        final KeyValueIterator<String, StatewiseDelta> stats = stateStores.dailyStats();
+
+        List<StatewiseDelta> sortedStats = new ArrayList<>();
+
+        stats.forEachRemaining(stat -> sortedStats.add(stat.value));
+        if (daily) {
+            sortedStats.sort((o1, o2) -> (int) (o2.getDeltaConfirmed() - o1.getDeltaConfirmed()));
+        } else {
+            sortedStats.sort((o1, o2) -> (int) (o2.getCurrentConfirmed() - o1.getCurrentConfirmed()));
+        }
+
+        String lastUpdated = sortedStats.get(0).getLastUpdatedTime();
+
+        return buildStateSummaryAlertText(sortedStats, lastUpdated, daily);
+    }
+
 }

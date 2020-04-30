@@ -78,7 +78,7 @@ public class AlertTextTests {
         List<StatewiseDelta> dailies = Collections.singletonList(new StatewiseDelta(9L, 4L, 15L, 0L, 0L, 0L, "", "Total"));
         Map<String, String> doublingRates = new HashMap<>();
         doublingRates.put("Total", "250");
-        buildSummaryAlertBlock(actualSummaryBlock, deltas, dailies, emptyMap(), doublingRates);
+        buildSummaryAlertBlock(actualSummaryBlock, deltas, dailies, emptyMap(), doublingRates, emptyMap());
 
         assertEquals(expectedSummaryBlock, actualSummaryBlock.get(), "Summary block is not structured correctly!");
     }
@@ -109,7 +109,7 @@ public class AlertTextTests {
         doublingRates.put("Delhi", "250");
         Map<String, StatewiseTestData> testing = new HashMap<>();
         testing.put("Delhi", new StatewiseTestData("51161", "", "", "", "", "1621", "", "", "Delhi", "", "", "", "", "53166", "384", "26/04/2020", "19462", "38"));
-        buildSummaryAlertBlock(actualSummaryBlock, deltas, dailies, testing, doublingRates);
+        buildSummaryAlertBlock(actualSummaryBlock, deltas, dailies, testing, doublingRates, emptyMap());
 
         assertEquals(expectedSummaryBlock, actualSummaryBlock.get(), "Summary block is not structured correctly!");
     }

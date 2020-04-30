@@ -24,7 +24,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicReference;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -33,16 +32,11 @@ import static java.time.ZoneId.of;
 import static java.time.temporal.ChronoUnit.DAYS;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.emptyMap;
-import static java.util.Collections.singletonList;
-import static java.util.Objects.nonNull;
-import static org.apache.kafka.clients.consumer.ConsumerConfig.CLIENT_ID_CONFIG;
-import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.covid19.Utils.friendlyTime;
-import static org.covid19.bot.BotUtils.buildStateSummaryAlertText;
+import static org.covid19.bot.BotUtils.buildStateSummary;
 import static org.covid19.bot.BotUtils.buildStatewiseAlertText;
-import static org.covid19.bot.BotUtils.buildSummaryAlertBlock;
 import static org.covid19.bot.BotUtils.fireStatewiseTelegramAlert;
 import static org.covid19.bot.BotUtils.sendTelegramAlert;
 
@@ -88,31 +82,6 @@ public class StatsAlertConsumerConfig {
         factory.setConsumerFactory(statewiseAlertsConsumerFactory());
         factory.setMissingTopicsFatal(false);
         factory.setBatchListener(true);
-        return factory;
-    }
-
-    // consumer setup for user requests
-    @Bean
-    public Map<String, Object> userRequestsConsumerConfigs() {
-        Map<String, Object> props = new HashMap<>(kafkaProperties.buildConsumerProperties());
-        props.put(GROUP_ID_CONFIG, "org.covid19.patient-telegram-bot-user-requests-consumer");
-        props.put(CLIENT_ID_CONFIG, "org.covid19.patient-telegram-bot-user-requests-consumer-client");
-        props.put(KEY_DESERIALIZER_CLASS_CONFIG, stringSerde.deserializer().getClass().getName());
-        props.put(VALUE_DESERIALIZER_CLASS_CONFIG, "io.confluent.kafka.serializers.KafkaJsonDeserializer");
-        props.put(JSON_VALUE_TYPE, UserRequest.class);
-        return props;
-    }
-
-    @Bean
-    public ConsumerFactory<String, UserRequest> userRequestsConsumerFactory() {
-        return new DefaultKafkaConsumerFactory<>(userRequestsConsumerConfigs());
-    }
-
-    @Bean
-    public ConcurrentKafkaListenerContainerFactory<String, UserRequest> userRequestsKafkaListenerContainerFactory() {
-        ConcurrentKafkaListenerContainerFactory<String, UserRequest> factory = new ConcurrentKafkaListenerContainerFactory<>();
-        factory.setConsumerFactory(userRequestsConsumerFactory());
-        factory.setMissingTopicsFatal(false);
         return factory;
     }
 
@@ -221,85 +190,11 @@ public class StatsAlertConsumerConfig {
         });
     }
 
-    @KafkaListener(topics = "user-request", id = "userRequestsConsumer",
-            idIsGroup = false, autoStartup = "false",
-            containerFactory = "userRequestsKafkaListenerContainerFactory")
-    public void listenForUserRequests(@Payload UserRequest request) {
-        if ("Summary".equalsIgnoreCase(request.getState())) {
-            sendTelegramAlert(covid19Bot, request.getChatId(), buildStateSummary(false), null, true);
-            return;
-        }
-        if ("Today".equalsIgnoreCase(request.getState())) {
-            sendTelegramAlert(covid19Bot, request.getChatId(), buildStateSummary(true), null, true);
-            return;
-        }
-        if ("Yesterday".equalsIgnoreCase(request.getState())) {
-            DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy").withZone(of("UTC"));
-            String yesterday = dateTimeFormatter.format(Instant.now().minus(1, DAYS));
-            sendTelegramAlert(covid19Bot, request.getChatId(), buildSpecificDateSummary(yesterday), null, true);
-            return;
-        }
-
-        DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy").withZone(of("UTC"));
-        String yesterday = dateTimeFormatter.format(Instant.now().minus(1, DAYS));
-
-        StatewiseDelta delta = stateStores.deltaStatsForState(request.getState());
-        StatewiseDelta daily = stateStores.dailyStatsForState(request.getState());
-        String newsSource = stateStores.newsSourceFor(request.getState());
-
-        Map<String, StatewiseTestData> testing = new HashMap<>();
-        final StatewiseTestData statewiseTestData = stateStores.latestAvailableTestDataFor(request.getState());
-        if (nonNull(statewiseTestData)) {
-            LOG.info("Found testing data for {} as {}", request.getState(), statewiseTestData);
-            testing.put(request.getState(), statewiseTestData);
-        }
-
-        Map<String, String> doublingRates = new HashMap<>();
-        doublingRates.put(request.getState(), stateStores.doublingRateFor(request.getState(), yesterday));
-
-        AtomicReference<String> alertText = new AtomicReference<>("");
-        buildSummaryAlertBlock(alertText, singletonList(delta), singletonList(daily), testing, doublingRates);
-        if (!TOTAL.equalsIgnoreCase(request.getState())) {
-            alertText.accumulateAndGet(newsSource, (current, update) -> current + "Source: " + update);
-        }
-        if (!testing.isEmpty() && testing.containsKey(request.getState())) {
-            alertText.accumulateAndGet(testing.get(request.getState()).getSource(), (current, update) -> current + "\n\nTesting data source: " + update);
-        }
-
-        sendTelegramAlert(covid19Bot, request.getChatId(), alertText.get(), null, true);
-    }
-
     @Scheduled(cron = "0 20 4,8,12,16,18 * * ?")
     public void sendSummaryUpdates() {
-        String text = buildStateSummary(false);
+        String text = buildStateSummary(false, stateStores);
 
         LOG.info("summary text {}", text);
         fireStatewiseTelegramAlert(covid19Bot, text);
-    }
-
-    private String buildStateSummary(boolean daily) {
-        final KeyValueIterator<String, StatewiseDelta> stats = stateStores.dailyStats();
-
-        List<StatewiseDelta> sortedStats = new ArrayList<>();
-
-        stats.forEachRemaining(stat -> sortedStats.add(stat.value));
-        if (daily) {
-            sortedStats.sort((o1, o2) -> (int) (o2.getDeltaConfirmed() - o1.getDeltaConfirmed()));
-        } else {
-            sortedStats.sort((o1, o2) -> (int) (o2.getCurrentConfirmed() - o1.getCurrentConfirmed()));
-        }
-
-        String lastUpdated = sortedStats.get(0).getLastUpdatedTime();
-
-        return buildStateSummaryAlertText(sortedStats, lastUpdated, daily);
-    }
-
-    private String buildSpecificDateSummary(String date) {
-        final List<StatewiseDelta> stats = stateStores.dailyCountFor(date);
-        stats.sort((o1, o2) -> (int) (o2.getDeltaConfirmed() - o1.getDeltaConfirmed()));
-
-        String lastUpdated = stats.get(0).getLastUpdatedTime();
-
-        return buildStateSummaryAlertText(stats, lastUpdated, true);
     }
 }

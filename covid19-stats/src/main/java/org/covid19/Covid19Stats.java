@@ -21,6 +21,12 @@ import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.WindowStore;
+import org.covid19.district.DistrictAndDate;
+import org.covid19.district.DistrictAndDateSerde;
+import org.covid19.district.DistrictwiseData;
+import org.covid19.district.DistrictwiseDataSerde;
+import org.covid19.district.StateAndDistrict;
+import org.covid19.district.StateAndDistrictSerde;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,6 +37,7 @@ import java.util.Properties;
 
 import static java.lang.Long.parseLong;
 import static java.lang.Math.round;
+import static java.lang.String.valueOf;
 import static java.time.Duration.ofDays;
 import static java.time.ZoneId.of;
 import static java.util.Objects.isNull;
@@ -64,6 +71,8 @@ public class Covid19Stats {
         DecimalFormat decimalFormatter = new DecimalFormat("0");
 
         final Serde<String> stringSerde = Serdes.String();
+        final Serde<StateAndDistrict> stateAndDistrictSerde = new StateAndDistrictSerde();
+        final Serde<DistrictwiseData> districtwiseDataSerde = new DistrictwiseDataSerde();
         final Serde<Long> longSerde = Serdes.Long();
         final Serde<StateAndDate> stateAndDateSerde = new StateAndDateSerde();
         final Serde<StatewiseStats> statewiseStatsSerde = new StatewiseStatsSerde();
@@ -86,6 +95,43 @@ public class Covid19Stats {
                 .toStream()
                 .to("statewise-delta-stats", Produced.with(stringSerde, statewiseDeltaSerde));
 
+
+        // we calculate delta ourselves instead of relying on data from API
+        builder.table("districtwise-data",
+                Materialized.<StateAndDistrict, DistrictwiseData, KeyValueStore<Bytes, byte[]>>as("district-ignored")
+                        .withKeySerde(stateAndDistrictSerde).withValueSerde(districtwiseDataSerde)
+                        .withLoggingDisabled())
+                .groupBy(KeyValue::pair, Grouped.with(stateAndDistrictSerde, districtwiseDataSerde))
+                .aggregate(() -> new DistrictwiseData("", "", "0", "0", "0", "0", "0", "0", "0", ""),
+                        Covid19Stats::calculateDistrictDelta,
+                        (key, value, aggregate) -> aggregate,
+                        Materialized.<StateAndDistrict, DistrictwiseData, KeyValueStore<Bytes, byte[]>>as("districtwise-delta")
+                                .withKeySerde(stateAndDistrictSerde).withValueSerde(districtwiseDataSerde))
+                .toStream()
+                .to("districtwise-delta", Produced.with(stateAndDistrictSerde, districtwiseDataSerde));
+
+
+        final KTable<Windowed<StateAndDistrict>, DistrictwiseData> districtwiseWindowedTable =
+                builder.stream("org.covid19.patient-status-stats-districtwise-delta-changelog",
+                        Consumed.with(stateAndDistrictSerde, districtwiseDataSerde))
+                        .groupByKey(Grouped.with(stateAndDistrictSerde, districtwiseDataSerde))
+                        .windowedBy(TimeWindows.of(ofDays(1L)))
+                        .aggregate(() -> new DistrictwiseData("", "", "0", "0", "0", "0", "0", "0", "0", ""),
+                                Covid19Stats::calculateDistrictDaily,
+                                Materialized.<StateAndDistrict, DistrictwiseData, WindowStore<Bytes, byte[]>>as("districtwise-windowed-daily")
+                                        .withKeySerde(stateAndDistrictSerde).withValueSerde(districtwiseDataSerde)
+                                        .withCachingDisabled().withRetention(ofDays(365L)));
+
+        // store district -> daily stats in a stream
+        districtwiseWindowedTable
+                .toStream()
+                .selectKey((key, value) -> key.key())
+                .to("districtwise-daily", Produced.with(stateAndDistrictSerde, districtwiseDataSerde));
+
+        districtwiseWindowedTable
+                .toStream()
+                .selectKey((key, value) -> new DistrictAndDate(dateTimeFormatter.format(key.window().startTime()), key.key().getState(), key.key().getDistrict()))
+                .to("daily-district-count", Produced.with(new DistrictAndDateSerde(), districtwiseDataSerde));
 
         // topology to build daily incremental stats
         final KTable<Windowed<String>, StatewiseDelta> statewiseWindowedTable =
@@ -162,6 +208,22 @@ public class Covid19Stats {
         return today.equalsIgnoreCase(stateAndDate.getDate());
     }
 
+    private static DistrictwiseData calculateDistrictDelta(StateAndDistrict stateAndDistrict, DistrictwiseData newData, DistrictwiseData aggregate) {
+        // update deltas
+        aggregate.setDeltaConfirmed(valueOf(parseLong(newData.getConfirmed()) - parseLong(aggregate.getConfirmed())));
+        aggregate.setDeltaRecovered(valueOf(parseLong(newData.getRecovered()) - parseLong(aggregate.getRecovered())));
+        aggregate.setDeltaDeceased(valueOf(parseLong(newData.getDeceased()) - parseLong(aggregate.getDeceased())));
+
+        aggregate.setConfirmed(newData.getConfirmed());
+        aggregate.setRecovered(newData.getRecovered());
+        aggregate.setDeceased(newData.getDeceased());
+
+        // update metadata
+        aggregate.setState(newData.getState());
+        aggregate.setDistrict(newData.getDistrict());
+        return aggregate;
+    }
+
     private static StatewiseDelta calculateDeltaStats(String state, StatewiseStats newStatewiseStats, StatewiseDelta aggregate) {
         // update deltas
         aggregate.setDeltaRecovered(parseLong(newStatewiseStats.getRecovered()) - aggregate.getCurrentRecovered());
@@ -176,6 +238,20 @@ public class Covid19Stats {
         // update metadata
         aggregate.setLastUpdatedTime(newStatewiseStats.getLastUpdatedTime());
         aggregate.setState(state);
+        return aggregate;
+    }
+
+    private static DistrictwiseData calculateDistrictDaily(StateAndDistrict stateAndDistrict, DistrictwiseData newData, DistrictwiseData aggregate) {
+        aggregate.setDeltaConfirmed(valueOf(parseLong(aggregate.getDeltaConfirmed()) + parseLong(newData.getDeltaConfirmed())));
+        aggregate.setDeltaRecovered(valueOf(parseLong(aggregate.getDeltaRecovered()) + parseLong(newData.getDeltaRecovered())));
+        aggregate.setDeltaDeceased(valueOf(parseLong(aggregate.getDeltaDeceased()) + parseLong(newData.getDeltaDeceased())));
+
+        aggregate.setConfirmed(newData.getConfirmed());
+        aggregate.setRecovered(newData.getRecovered());
+        aggregate.setDeceased(newData.getDeceased());
+
+        aggregate.setState(newData.getState());
+        aggregate.setDistrict(newData.getDistrict());
         return aggregate;
     }
 

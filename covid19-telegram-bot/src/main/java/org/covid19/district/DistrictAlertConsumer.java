@@ -28,7 +28,6 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.CLIENT_ID_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
-import static org.apache.kafka.clients.consumer.OffsetResetStrategy.LATEST;
 import static org.covid19.bot.BotUtils.sendTelegramAlert;
 import static org.covid19.district.DistrictAlertUtils.buildDistrictwiseAlert;
 
@@ -51,7 +50,7 @@ public class DistrictAlertConsumer {
     @Bean
     public Map<String, Object> districtAlertsConsumerConfigs() {
         Map<String, Object> props = new HashMap<>(kafkaProperties.buildConsumerProperties());
-        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, LATEST);
+        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
         props.put(GROUP_ID_CONFIG, "org.covid19.telegram-bot-district-alerts-consumer");
         props.put(CLIENT_ID_CONFIG, "org.covid19.telegram-bot-district-alerts-consumer-client");
         props.put(KEY_DESERIALIZER_CLASS_CONFIG, "io.confluent.kafka.serializers.KafkaJsonDeserializer");
@@ -95,7 +94,7 @@ public class DistrictAlertConsumer {
                 continue;
             }
             readyToSend.add(delta);
-            dailyIncrements.add(stateStores.dailyStatsForStateAndDistrict(delta.getState(), delta.getDistrict()));
+            dailyIncrements.add(stateStores.deltaStatsForStateAndDistrict(delta.getState(), delta.getDistrict()));
         }
         if (readyToSend.isEmpty()) {
             return; // no useful update

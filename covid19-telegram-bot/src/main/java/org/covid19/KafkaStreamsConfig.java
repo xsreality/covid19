@@ -97,6 +97,14 @@ public class KafkaStreamsConfig {
     }
 
     @Bean
+    public KTable<StateAndDistrict, DistrictwiseData> districtDeltaTable(StreamsBuilder streamsBuilder) {
+        return streamsBuilder.table("districtwise-delta",
+                Materialized.<StateAndDistrict, DistrictwiseData, KeyValueStore<Bytes, byte[]>>as(
+                        Stores.persistentKeyValueStore("districtwise-delta-persistent").name())
+                        .withKeySerde(new StateAndDistrictSerde()).withValueSerde(new DistrictwiseDataSerde()).withCachingDisabled());
+    }
+
+    @Bean
     public KTable<String, UserPrefs> userPrefsTable(StreamsBuilder streamsBuilder) {
         return streamsBuilder.table("user-preferences",
                 Materialized.<String, UserPrefs, KeyValueStore<Bytes, byte[]>>as(

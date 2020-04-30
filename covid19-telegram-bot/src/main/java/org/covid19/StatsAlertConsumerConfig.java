@@ -4,6 +4,7 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.covid19.bot.Covid19Bot;
+import org.covid19.district.DistrictwiseData;
 import org.springframework.boot.autoconfigure.kafka.KafkaProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -169,6 +170,7 @@ public class StatsAlertConsumerConfig {
             // user has a preferred state
             List<StatewiseDelta> userStatesDelta = new ArrayList<>();
             List<StatewiseDelta> userStatesDaily = new ArrayList<>();
+            List<DistrictwiseData> userDistrictDelta = new ArrayList<>();
             Map<String, String> userDoublingRates = new HashMap<>();
             String lastUpdatedUserState = deltas.get(deltas.size() - 1).getLastUpdatedTime();
             boolean userHasRelevantUpdate = false;
@@ -188,6 +190,7 @@ public class StatsAlertConsumerConfig {
                     userHasRelevantUpdate = true;
                     userStatesDelta.add(stateStores.deltaStatsForState(delta.getState()));
                     userStatesDaily.add(stateStores.dailyStatsForState(delta.getState()));
+//                    userDistrictDelta.add(stateStores.deltaStatsForStateAndDistrict(delta.))
                     userDoublingRates.put(delta.getState(), stateStores.doublingRateFor(delta.getState(), yesterday));
                 }
             }

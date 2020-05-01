@@ -71,7 +71,7 @@ public class AlertTextTests {
                 "Recovered    : (↑9) 455\n" +
                 "Deaths       : (↑4) 157\n" +
                 "Doubling rate: 250 days\n" +
-                "</pre>\n";
+                "</pre>";
         AtomicReference<String> actualSummaryBlock = new AtomicReference<>("");
 
         List<StatewiseDelta> deltas = Collections.singletonList(new StatewiseDelta(9L, 4L, 15L, 455L, 157L, 5341L, "", "Total"));
@@ -92,7 +92,7 @@ public class AlertTextTests {
                 "Recovered    : (↑9) 455\n" +
                 "Deaths       : (↑4) 157\n" +
                 "Doubling rate: 250 days\n" +
-                "</pre>\n" +
+                "</pre>" +
                 "<pre>" +
                 "Total tested   : (↑19462) 53166\n" +
                 "Positive       : (↑38) 1621\n" +
@@ -128,7 +128,7 @@ public class AlertTextTests {
                 "Recovered    : (↑0) 0\n" +
                 "Deaths       : (↑0) 0\n" +
                 "Doubling rate: 19.44 days\n" +
-                "</pre>\n" +
+                "</pre>" +
                 "\n" +
                 "<b>Himachal Pradesh</b>\n" +
                 "<pre>\n" +
@@ -137,7 +137,7 @@ public class AlertTextTests {
                 "Recovered    : (↑0) 1\n" +
                 "Deaths       : (↑0) 2\n" +
                 "Doubling rate: 2.10 days\n" +
-                "</pre>\n" +
+                "</pre>" +
                 "\n" +
                 "<b>Total</b>\n" +
                 "<pre>\n" +
@@ -146,7 +146,7 @@ public class AlertTextTests {
                 "Recovered    : (↑8) 455\n" +
                 "Deaths       : (↑3) 157\n" +
                 "Doubling rate: 116 days\n" +
-                "</pre>\n";
+                "</pre>";
 
         String lastUpdated = "April 08, 12:04 AM";
 
@@ -174,7 +174,7 @@ public class AlertTextTests {
         final String expectedFinalAlert = "<i>April 08, 12:04 AM</i>\n" +
                 "\n" +
                 "1 new case in Maharashtra\n\n" +
-                "<i>District-wise breakup</i>\n" +
+                "<b>District-wise breakup</b>\n" +
                 "1 new case in Mumbai\n" +
                 "\n" +
                 "<b>Total</b>\n" +
@@ -184,7 +184,7 @@ public class AlertTextTests {
                 "Recovered    : (↑8) 455\n" +
                 "Deaths       : (↑3) 157\n" +
                 "Doubling rate: 116 days\n" +
-                "</pre>\n\n" +
+                "</pre>\n" +
                 "<b>Maharashtra</b>\n" +
                 "<pre>\n" +
                 "Total cases  : (↑1) 28\n" +
@@ -192,7 +192,7 @@ public class AlertTextTests {
                 "Recovered    : (↑0) 0\n" +
                 "Deaths       : (↑0) 0\n" +
                 "Doubling rate: 19.44 days\n" +
-                "</pre>\n";
+                "</pre>";
 
         String lastUpdated = "April 08, 12:04 AM";
 

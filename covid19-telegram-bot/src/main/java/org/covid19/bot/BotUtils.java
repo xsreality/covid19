@@ -13,7 +13,6 @@ import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import java.text.DecimalFormat;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
@@ -115,8 +114,8 @@ public class BotUtils {
     public static String buildStatewiseAlertText(String lastUpdated, List<StatewiseDelta> deltas, List<StatewiseDelta> dailies, Map<String, StatewiseTestData> testing, Map<String, String> doublingRates, List<DistrictwiseData> districtDeltas) {
         AtomicReference<String> alertText = new AtomicReference<>("");
         deltas.forEach(delta -> buildDeltaAlertLine(alertText, delta));
-        if (!districtDeltas.isEmpty()) {
-            String districtTitle = "\n<i>District-wise breakup</i>\n";
+        if (isRelevantDistrictDelta(districtDeltas)) {
+            String districtTitle = "\n<b>District-wise breakup</b>\n";
             alertText.accumulateAndGet(districtTitle, (current, update) -> current + update);
         }
         districtDeltas.forEach(delta -> buildDistrictAlertLine(alertText, delta));
@@ -128,6 +127,13 @@ public class BotUtils {
         String finalText = String.format("<i>%s</i>\n\n%s", lastUpdated, alertText.get());
         LOG.info("Statewise Alert text generated:\n{}", finalText);
         return finalText;
+    }
+
+    public static boolean isRelevantDistrictDelta(List<DistrictwiseData> deltas) {
+        if (deltas.isEmpty()) {
+            return false;
+        }
+        return deltas.stream().anyMatch(delta -> parseLong(delta.getDeltaConfirmed()) > 0L || parseLong(delta.getDeltaRecovered()) > 0L || parseLong(delta.getDeltaDeceased()) > 0L);
     }
 
     public static void fireStatewiseTelegramAlert(Covid19Bot covid19Bot, String alertText) {
@@ -154,7 +160,7 @@ public class BotUtils {
                             "Recovered    : (↑%s) %s\n" +
                             "Deaths       : (↑%s) %s\n" +
                             "Doubling rate: %s days\n" +
-                            "</pre>\n",
+                            "</pre>",
                     delta.getState(),
                     nonNull(daily) ? daily.getDeltaConfirmed() : "", delta.getCurrentConfirmed(),
                     nonNull(daily) ? daily.getDeltaConfirmed() - daily.getDeltaRecovered() - daily.getDeltaDeaths() : "", delta.getCurrentConfirmed() - delta.getCurrentRecovered() - delta.getCurrentDeaths(),

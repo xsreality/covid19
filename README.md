@@ -11,13 +11,15 @@ To subscribe, just send the command `/start`. To unsubscribe, send the command `
 ## New Features
 
 1. Testing data is included in every on-demand update if available. This includes tests done, positive, negative and positivity rate.
-2. All updates carry news sources (links to State Govt / ANI tweets).
-3. Updates include `Doubling rate` based on previous day statistics.
-4. New commands: `/today`, `/summary` and `/total`. See below for more details.
+2. District updates are included.
+3. All updates carry news sources (links to State Govt / ANI tweets).
+4. Updates include `Doubling rate` based on previous day statistics.
+5. New commands: `/today`, `/summary` and `/total`. See below for more details.
+6. Get charts ang graphs with command `/charts`
 
 Below is an example of an alert sent by the bot:
 
-![Sample Telegram Bot Alert screenshot](https://i.ibb.co/V3hQLwV/Screenshot-20200402-000351.jpg "Sample Telegram alert")
+![Sample Telegram Bot Alert screenshot](https://i.ibb.co/0m64BzC/Screenshot-20200501-173204.jpg "Sample Telegram alert")
 ![Sample Telegram Bot Statewise Alert screenshot](https://i.ibb.co/hRw0Qt1/Screenshot-20200423-190044.jpg "Statewise alert")
 
 ## Alert Updates

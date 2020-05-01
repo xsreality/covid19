@@ -179,13 +179,7 @@ public class StatsAlertConsumerConfig {
             LOG.info("Update is relevant for user {}", userPref.getUserId());
 
             String alertTextForUserStates;
-            if (telegramTestUser.equalsIgnoreCase(userPref.getUserId())) {
-                LOG.info("Entering canary mode for district updates...");
-                // send district updates only to creator until confirmed working
-                alertTextForUserStates = buildStatewiseAlertText(friendlyTime(lastUpdatedUserState), userStatesDelta, userStatesDaily, emptyMap(), userDoublingRates, userDistrictDelta);
-            } else {
-                alertTextForUserStates = buildStatewiseAlertText(friendlyTime(lastUpdatedUserState), userStatesDelta, userStatesDaily, emptyMap(), userDoublingRates, emptyList());
-            }
+            alertTextForUserStates = buildStatewiseAlertText(friendlyTime(lastUpdatedUserState), userStatesDelta, userStatesDaily, emptyMap(), userDoublingRates, userDistrictDelta);
             sendTelegramAlert(covid19Bot, userPref.getUserId(), alertTextForUserStates, null, true);
         });
     }

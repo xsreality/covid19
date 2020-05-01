@@ -15,6 +15,10 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
 import org.covid19.bot.Covid19Bot;
+import org.covid19.district.DistrictwiseData;
+import org.covid19.district.DistrictwiseDataSerde;
+import org.covid19.district.StateAndDistrict;
+import org.covid19.district.StateAndDistrictSerde;
 import org.springframework.boot.autoconfigure.kafka.KafkaProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -82,6 +86,22 @@ public class KafkaStreamsConfig {
                 Materialized.<String, StatewiseDelta, KeyValueStore<Bytes, byte[]>>as(
                         Stores.persistentKeyValueStore("statewise-delta-persistent").name())
                         .withKeySerde(stringSerde).withValueSerde(new StatewiseDeltaSerde()).withCachingDisabled());
+    }
+
+    @Bean
+    public KTable<StateAndDistrict, DistrictwiseData> districtDailyTable(StreamsBuilder streamsBuilder) {
+        return streamsBuilder.table("districtwise-daily",
+                Materialized.<StateAndDistrict, DistrictwiseData, KeyValueStore<Bytes, byte[]>>as(
+                        Stores.persistentKeyValueStore("districtwise-daily-persistent").name())
+                        .withKeySerde(new StateAndDistrictSerde()).withValueSerde(new DistrictwiseDataSerde()).withCachingDisabled());
+    }
+
+    @Bean
+    public KTable<StateAndDistrict, DistrictwiseData> districtDeltaTable(StreamsBuilder streamsBuilder) {
+        return streamsBuilder.table("districtwise-delta",
+                Materialized.<StateAndDistrict, DistrictwiseData, KeyValueStore<Bytes, byte[]>>as(
+                        Stores.persistentKeyValueStore("districtwise-delta-persistent").name())
+                        .withKeySerde(new StateAndDistrictSerde()).withValueSerde(new DistrictwiseDataSerde()).withCachingDisabled());
     }
 
     @Bean

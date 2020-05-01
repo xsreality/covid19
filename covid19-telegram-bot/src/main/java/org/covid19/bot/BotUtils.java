@@ -1,14 +1,18 @@
 package org.covid19.bot;
 
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.covid19.PatientAndMessage;
 import org.covid19.PatientInfo;
+import org.covid19.StateStoresManager;
 import org.covid19.StatewiseDelta;
 import org.covid19.StatewiseTestData;
+import org.covid19.district.DistrictwiseData;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.Chat;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import java.text.DecimalFormat;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
@@ -17,11 +21,13 @@ import lombok.extern.slf4j.Slf4j;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
 import static java.lang.Long.parseLong;
+import static java.util.Collections.emptyMap;
 import static java.util.Objects.isNull;
 import static java.util.Objects.nonNull;
 import static org.covid19.Utils.friendlyTime;
 import static org.covid19.Utils.initStateCodes;
 import static org.covid19.Utils.zip;
+import static org.covid19.district.DistrictAlertUtils.buildDistrictDeltaAlertLine;
 
 @Slf4j
 public class BotUtils {
@@ -105,17 +111,26 @@ public class BotUtils {
         }
     }
 
-    public static String buildStatewiseAlertText(String lastUpdated, List<StatewiseDelta> deltas, List<StatewiseDelta> dailies, Map<String, StatewiseTestData> testing, Map<String, String> doublingRates) {
+    public static String buildStatewiseAlertText(String lastUpdated, List<StatewiseDelta> deltas, List<StatewiseDelta> dailies, Map<String, StatewiseTestData> testing, Map<String, String> doublingRates, List<DistrictwiseData> districtDeltas) {
         AtomicReference<String> alertText = new AtomicReference<>("");
         deltas.forEach(delta -> buildDeltaAlertLine(alertText, delta));
+        if (isRelevantDistrictDelta(districtDeltas)) {
+            String districtTitle = "\n<b>District-wise breakup</b>\n";
+            alertText.accumulateAndGet(districtTitle, (current, update) -> current + update);
+        }
+        districtDeltas.forEach(delta -> buildDistrictDeltaAlertLine(alertText, delta));
         if (alertText.get().isEmpty() || "\n".equalsIgnoreCase(alertText.get())) {
             LOG.info("No useful update to alert on. Skipping...");
             return "";
         }
-        buildSummaryAlertBlock(alertText, deltas, dailies, testing, doublingRates);
+        buildSummaryAlertBlock(alertText, deltas, dailies, testing, doublingRates, emptyMap());
         String finalText = String.format("<i>%s</i>\n\n%s", lastUpdated, alertText.get());
         LOG.info("Statewise Alert text generated:\n{}", finalText);
         return finalText;
+    }
+
+    public static boolean isRelevantDistrictDelta(List<DistrictwiseData> deltas) {
+        return deltas.stream().anyMatch(delta -> parseLong(delta.getDeltaConfirmed()) > 0L || parseLong(delta.getDeltaRecovered()) > 0L || parseLong(delta.getDeltaDeceased()) > 0L);
     }
 
     public static void fireStatewiseTelegramAlert(Covid19Bot covid19Bot, String alertText) {
@@ -131,7 +146,7 @@ public class BotUtils {
 
     public static void buildSummaryAlertBlock(AtomicReference<String> updateText, List<StatewiseDelta> deltas,
                                               List<StatewiseDelta> dailies, Map<String, StatewiseTestData> testing,
-                                              Map<String, String> doublingRates) {
+                                              Map<String, String> doublingRates, Map<String, List<DistrictwiseData>> districtsData) {
         zip(deltas, dailies).forEach(pair -> {
             StatewiseDelta delta = pair.getKey();
             StatewiseDelta daily = pair.getValue();
@@ -142,7 +157,7 @@ public class BotUtils {
                             "Recovered    : (↑%s) %s\n" +
                             "Deaths       : (↑%s) %s\n" +
                             "Doubling rate: %s days\n" +
-                            "</pre>\n",
+                            "</pre>",
                     delta.getState(),
                     nonNull(daily) ? daily.getDeltaConfirmed() : "", delta.getCurrentConfirmed(),
                     nonNull(daily) ? daily.getDeltaConfirmed() - daily.getDeltaRecovered() - daily.getDeltaDeaths() : "", delta.getCurrentConfirmed() - delta.getCurrentRecovered() - delta.getCurrentDeaths(),
@@ -154,7 +169,7 @@ public class BotUtils {
             if (!testing.isEmpty() && testing.containsKey(delta.getState())) {
                 StatewiseTestData testData = testing.get(delta.getState());
                 String positivityRate = calculatePositivityRate(testData);
-                String testingText = String.format("<pre>" +
+                String testingText = String.format("\n<pre>" +
                                 "Total tested   : (↑%s) %s\n" +
                                 "Positive       : (↑%s) %s\n" +
                                 "Negative       : %s\n" +
@@ -169,6 +184,14 @@ public class BotUtils {
                         positivityRate, testData.getUpdatedon());
                 updateText.accumulateAndGet(testingText, (current, update) -> current + update);
             }
+
+            List<DistrictwiseData> districtwiseData = districtsData.getOrDefault(delta.getState(), new ArrayList<>());
+            if (isRelevantDistrictDelta(districtwiseData)) {
+                String districtTitle = "<b>District-wise breakup (today)</b>\n";
+                updateText.accumulateAndGet(districtTitle, (current, update) -> current + update);
+            }
+            // build district data table
+            districtwiseData.forEach(district -> buildDistrictDeltaAlertLine(updateText, district));
         });
     }
 
@@ -265,4 +288,22 @@ public class BotUtils {
         }
         return "";
     }
+
+    public static String buildStateSummary(boolean daily, StateStoresManager stateStores) {
+        final KeyValueIterator<String, StatewiseDelta> stats = stateStores.dailyStats();
+
+        List<StatewiseDelta> sortedStats = new ArrayList<>();
+
+        stats.forEachRemaining(stat -> sortedStats.add(stat.value));
+        if (daily) {
+            sortedStats.sort((o1, o2) -> (int) (o2.getDeltaConfirmed() - o1.getDeltaConfirmed()));
+        } else {
+            sortedStats.sort((o1, o2) -> (int) (o2.getCurrentConfirmed() - o1.getCurrentConfirmed()));
+        }
+
+        String lastUpdated = sortedStats.get(0).getLastUpdatedTime();
+
+        return buildStateSummaryAlertText(sortedStats, lastUpdated, daily);
+    }
+
 }

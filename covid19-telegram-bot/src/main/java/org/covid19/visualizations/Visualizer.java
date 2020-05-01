@@ -58,7 +58,7 @@ public class Visualizer {
         this.chartsKafkaTemplate = chartsKafkaTemplate;
     }
 
-    @Scheduled(cron = "0 0 22 * * ?")
+    @Scheduled(cron = "0 0 02 * * ?")
     public void dailyAndTotalCharts() {
         LOG.info("Generating visualization for last 7 days overview");
         Map<String, StatewiseDelta> data = new LinkedHashMap<>();
@@ -114,7 +114,7 @@ public class Visualizer {
         chartsKafkaTemplate.send("visualizations", LAST_TWO_WEEKS_TOTAL, cumulativeImage);
     }
 
-    @Scheduled(cron = "0 2 22 * * ?")
+    @Scheduled(cron = "0 2 02 * * ?")
     public void doublingRateChart() {
         LOG.info("Generating doubling rate chart");
         Map<String, String> data = new LinkedHashMap<>();
@@ -147,7 +147,7 @@ public class Visualizer {
         chartsKafkaTemplate.send("visualizations", DOUBLING_RATE, doublingRateImage);
     }
 
-    @Scheduled(cron = "0 3 22 * * ?")
+    @Scheduled(cron = "0 3 02 * * ?")
     public void top5StatesTrend() {
         LOG.info("Generating top 5 states trend chart");
         DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy").withZone(of("UTC"));
@@ -200,7 +200,7 @@ public class Visualizer {
         chartsKafkaTemplate.send("visualizations", STATES_TREND, statesTrendImage);
     }
 
-    @Scheduled(cron = "0 4 22 * * ?")
+    @Scheduled(cron = "0 4 02 * * ?")
     public void historyTrend() {
         LOG.info("Generating history trend chart");
         DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy").withZone(of("UTC"));

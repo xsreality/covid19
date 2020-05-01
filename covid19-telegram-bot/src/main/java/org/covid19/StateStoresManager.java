@@ -6,6 +6,8 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
+import org.covid19.district.DistrictwiseData;
+import org.covid19.district.StateAndDistrict;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -34,6 +36,8 @@ import static org.covid19.visualizations.Visualizer.STATES_TREND;
 @Configuration
 public class StateStoresManager {
     private ReadOnlyKeyValueStore<String, StatewiseDelta> dailyStatsStore;
+    private ReadOnlyKeyValueStore<StateAndDistrict, DistrictwiseData> districtDailyStore;
+    private ReadOnlyKeyValueStore<StateAndDistrict, DistrictwiseData> districtDeltaStore;
     private ReadOnlyKeyValueStore<String, StatewiseDelta> deltaStatsStore;
     private ReadOnlyKeyValueStore<String, UserPrefs> userPrefsStore;
     private ReadOnlyKeyValueStore<String, String> newsSourcesStore;
@@ -69,10 +73,14 @@ public class StateStoresManager {
                                     KTable<StateAndDate, String> doublingRateTable,
                                     KTable<StateAndDate, StatewiseDelta> dailyCountTable,
                                     KTable<StateAndDate, StatewiseTestData> stateTestTable,
-                                    KTable<String, byte[]> visualizationsTable) {
+                                    KTable<String, byte[]> visualizationsTable,
+                                    KTable<StateAndDistrict, DistrictwiseData> districtDailyTable,
+                                    KTable<StateAndDistrict, DistrictwiseData> districtDeltaTable) {
         return args -> {
             latch(fb).await(100, TimeUnit.SECONDS);
             dailyStatsStore = fb.getKafkaStreams().store(dailyStatsTable.queryableStoreName(), QueryableStoreTypes.keyValueStore());
+            districtDailyStore = fb.getKafkaStreams().store(districtDailyTable.queryableStoreName(), QueryableStoreTypes.keyValueStore());
+            districtDeltaStore = fb.getKafkaStreams().store(districtDeltaTable.queryableStoreName(), QueryableStoreTypes.keyValueStore());
             deltaStatsStore = fb.getKafkaStreams().store(deltaStatsTable.queryableStoreName(), QueryableStoreTypes.keyValueStore());
             userPrefsStore = fb.getKafkaStreams().store(userPrefsTable.queryableStoreName(), QueryableStoreTypes.keyValueStore());
             newsSourcesStore = fb.getKafkaStreams().store(newsSourcesTable.queryableStoreName(), QueryableStoreTypes.keyValueStore());
@@ -84,6 +92,7 @@ public class StateStoresManager {
             // start consumers only after state store is ready.
             registry.getListenerContainer("statewiseAlertsConsumer").start();
             registry.getListenerContainer("userRequestsConsumer").start();
+            registry.getListenerContainer("districtwiseAlertsConsumer").start();
         };
     }
 
@@ -101,6 +110,40 @@ public class StateStoresManager {
 
     public StatewiseDelta dailyStatsForState(String state) {
         return dailyStatsStore.get(state);
+    }
+
+    public DistrictwiseData deltaStatsForStateAndDistrict(String state, String district) {
+        return districtDeltaStore.get(new StateAndDistrict(state, district));
+    }
+
+    public List<DistrictwiseData> districtDeltaStatsFor(String state) {
+        final KeyValueIterator<StateAndDistrict, DistrictwiseData> all = districtDeltaStore.all();
+        List<DistrictwiseData> data = new ArrayList<>();
+        while (all.hasNext()) {
+            final KeyValue<StateAndDistrict, DistrictwiseData> next = all.next();
+            if (!state.equalsIgnoreCase(next.key.getState())) {
+                continue;
+            }
+            data.add(next.value);
+        }
+        return data;
+    }
+
+    public List<DistrictwiseData> districtDailyStatsFor(String state) {
+        final KeyValueIterator<StateAndDistrict, DistrictwiseData> all = districtDailyStore.all();
+        List<DistrictwiseData> data = new ArrayList<>();
+        while (all.hasNext()) {
+            final KeyValue<StateAndDistrict, DistrictwiseData> next = all.next();
+            if (!state.equalsIgnoreCase(next.key.getState())) {
+                continue;
+            }
+            data.add(next.value);
+        }
+        return data;
+    }
+
+    public DistrictwiseData dailyStatsForStateAndDistrict(String state, String district) {
+        return districtDailyStore.get(new StateAndDistrict(state, district));
     }
 
     public StatewiseDelta deltaStatsForState(String state) {

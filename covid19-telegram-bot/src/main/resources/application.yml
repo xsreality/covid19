@@ -1,3 +1,6 @@
+canary:
+  enabled: true
+
 telegram:
   bot.username: covid19_india_alerts_bot
   db.path: /tmp/telegram.db

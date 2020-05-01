@@ -119,15 +119,15 @@ public class UserRequestConsumer {
         Map<String, String> doublingRates = new HashMap<>();
         doublingRates.put(request.getState(), stateStores.doublingRateFor(request.getState(), yesterday));
 
-        List<DistrictwiseData> districtwiseData = stateStores.districtDeltaStatsFor(request.getState());
-        districtwiseData.sort((o1, o2) -> parseInt(o2.getConfirmed()) - parseInt(o1.getConfirmed()));
+        List<DistrictwiseData> districtwiseData = stateStores.districtDailyStatsFor(request.getState());
+        districtwiseData.sort((o1, o2) -> parseInt(o2.getDeltaConfirmed()) - parseInt(o1.getDeltaConfirmed()));
         Map<String, List<DistrictwiseData>> districtsData = new HashMap<>();
         districtsData.put(request.getState(), districtwiseData);
 
         AtomicReference<String> alertText = new AtomicReference<>("");
         buildSummaryAlertBlock(alertText, singletonList(delta), singletonList(daily), testing, doublingRates, districtsData);
         if (!TOTAL.equalsIgnoreCase(request.getState())) {
-            alertText.accumulateAndGet(newsSource, (current, update) -> current + "Source: " + update);
+            alertText.accumulateAndGet(newsSource, (current, update) -> current + "\nSource: " + update);
         }
         if (!testing.isEmpty() && testing.containsKey(request.getState())) {
             alertText.accumulateAndGet(testing.get(request.getState()).getSource(), (current, update) -> current + "\n\nTesting data source: " + update);

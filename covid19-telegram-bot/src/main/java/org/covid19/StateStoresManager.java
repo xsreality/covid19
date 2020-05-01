@@ -129,6 +129,19 @@ public class StateStoresManager {
         return data;
     }
 
+    public List<DistrictwiseData> districtDailyStatsFor(String state) {
+        final KeyValueIterator<StateAndDistrict, DistrictwiseData> all = districtDailyStore.all();
+        List<DistrictwiseData> data = new ArrayList<>();
+        while (all.hasNext()) {
+            final KeyValue<StateAndDistrict, DistrictwiseData> next = all.next();
+            if (!state.equalsIgnoreCase(next.key.getState())) {
+                continue;
+            }
+            data.add(next.value);
+        }
+        return data;
+    }
+
     public DistrictwiseData dailyStatsForStateAndDistrict(String state, String district) {
         return districtDailyStore.get(new StateAndDistrict(state, district));
     }

@@ -27,7 +27,7 @@ import static java.util.Objects.nonNull;
 import static org.covid19.Utils.friendlyTime;
 import static org.covid19.Utils.initStateCodes;
 import static org.covid19.Utils.zip;
-import static org.covid19.district.DistrictAlertUtils.buildDistrictAlertLine;
+import static org.covid19.district.DistrictAlertUtils.buildDistrictDeltaAlertLine;
 
 @Slf4j
 public class BotUtils {
@@ -118,7 +118,7 @@ public class BotUtils {
             String districtTitle = "\n<b>District-wise breakup</b>\n";
             alertText.accumulateAndGet(districtTitle, (current, update) -> current + update);
         }
-        districtDeltas.forEach(delta -> buildDistrictAlertLine(alertText, delta));
+        districtDeltas.forEach(delta -> buildDistrictDeltaAlertLine(alertText, delta));
         if (alertText.get().isEmpty() || "\n".equalsIgnoreCase(alertText.get())) {
             LOG.info("No useful update to alert on. Skipping...");
             return "";
@@ -130,9 +130,6 @@ public class BotUtils {
     }
 
     public static boolean isRelevantDistrictDelta(List<DistrictwiseData> deltas) {
-        if (deltas.isEmpty()) {
-            return false;
-        }
         return deltas.stream().anyMatch(delta -> parseLong(delta.getDeltaConfirmed()) > 0L || parseLong(delta.getDeltaRecovered()) > 0L || parseLong(delta.getDeltaDeceased()) > 0L);
     }
 
@@ -172,7 +169,7 @@ public class BotUtils {
             if (!testing.isEmpty() && testing.containsKey(delta.getState())) {
                 StatewiseTestData testData = testing.get(delta.getState());
                 String positivityRate = calculatePositivityRate(testData);
-                String testingText = String.format("<pre>" +
+                String testingText = String.format("\n<pre>" +
                                 "Total tested   : (↑%s) %s\n" +
                                 "Positive       : (↑%s) %s\n" +
                                 "Negative       : %s\n" +
@@ -189,11 +186,12 @@ public class BotUtils {
             }
 
             List<DistrictwiseData> districtwiseData = districtsData.getOrDefault(delta.getState(), new ArrayList<>());
-            if (districtwiseData.isEmpty()) {
-                return;
+            if (isRelevantDistrictDelta(districtwiseData)) {
+                String districtTitle = "<b>District-wise breakup (today)</b>\n";
+                updateText.accumulateAndGet(districtTitle, (current, update) -> current + update);
             }
             // build district data table
-
+            districtwiseData.forEach(district -> buildDistrictDeltaAlertLine(updateText, district));
         });
     }
 

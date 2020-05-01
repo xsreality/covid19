@@ -3,7 +3,6 @@ package org.covid19;
 import org.covid19.district.DistrictwiseData;
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -12,6 +11,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.emptyMap;
+import static java.util.Collections.singletonList;
 import static org.covid19.bot.BotUtils.buildDeltaAlertLine;
 import static org.covid19.bot.BotUtils.buildStatewiseAlertText;
 import static org.covid19.bot.BotUtils.buildSummaryAlertBlock;
@@ -74,8 +74,8 @@ public class AlertTextTests {
                 "</pre>";
         AtomicReference<String> actualSummaryBlock = new AtomicReference<>("");
 
-        List<StatewiseDelta> deltas = Collections.singletonList(new StatewiseDelta(9L, 4L, 15L, 455L, 157L, 5341L, "", "Total"));
-        List<StatewiseDelta> dailies = Collections.singletonList(new StatewiseDelta(9L, 4L, 15L, 0L, 0L, 0L, "", "Total"));
+        List<StatewiseDelta> deltas = singletonList(new StatewiseDelta(9L, 4L, 15L, 455L, 157L, 5341L, "", "Total"));
+        List<StatewiseDelta> dailies = singletonList(new StatewiseDelta(9L, 4L, 15L, 0L, 0L, 0L, "", "Total"));
         Map<String, String> doublingRates = new HashMap<>();
         doublingRates.put("Total", "250");
         buildSummaryAlertBlock(actualSummaryBlock, deltas, dailies, emptyMap(), doublingRates, emptyMap());
@@ -93,7 +93,7 @@ public class AlertTextTests {
                 "Deaths       : (↑4) 157\n" +
                 "Doubling rate: 250 days\n" +
                 "</pre>" +
-                "<pre>" +
+                "\n<pre>" +
                 "Total tested   : (↑19462) 53166\n" +
                 "Positive       : (↑38) 1621\n" +
                 "Negative       : 51161\n" +
@@ -103,13 +103,50 @@ public class AlertTextTests {
                 "</pre>\n";
         AtomicReference<String> actualSummaryBlock = new AtomicReference<>("");
 
-        List<StatewiseDelta> deltas = Collections.singletonList(new StatewiseDelta(9L, 4L, 15L, 455L, 157L, 5341L, "", "Delhi"));
-        List<StatewiseDelta> dailies = Collections.singletonList(new StatewiseDelta(9L, 4L, 15L, 0L, 0L, 0L, "", "Delhi"));
+        List<StatewiseDelta> deltas = singletonList(new StatewiseDelta(9L, 4L, 15L, 455L, 157L, 5341L, "", "Delhi"));
+        List<StatewiseDelta> dailies = singletonList(new StatewiseDelta(9L, 4L, 15L, 0L, 0L, 0L, "", "Delhi"));
         Map<String, String> doublingRates = new HashMap<>();
         doublingRates.put("Delhi", "250");
         Map<String, StatewiseTestData> testing = new HashMap<>();
         testing.put("Delhi", new StatewiseTestData("51161", "", "", "", "", "1621", "", "", "Delhi", "", "", "", "", "53166", "384", "26/04/2020", "19462", "38"));
         buildSummaryAlertBlock(actualSummaryBlock, deltas, dailies, testing, doublingRates, emptyMap());
+
+        assertEquals(expectedSummaryBlock, actualSummaryBlock.get(), "Summary block is not structured correctly!");
+    }
+
+    @Test
+    void summaryAlertBlockWithTestingAndDistrictData() {
+        final String expectedSummaryBlock = "\n<b>Delhi</b>\n" +
+                "<pre>\n" +
+                "Total cases  : (↑15) 5341\n" +
+                "Active       : (↑2) 4729\n" +
+                "Recovered    : (↑9) 455\n" +
+                "Deaths       : (↑4) 157\n" +
+                "Doubling rate: 250 days\n" +
+                "</pre>" +
+                "\n<pre>" +
+                "Total tested   : (↑19462) 53166\n" +
+                "Positive       : (↑38) 1621\n" +
+                "Negative       : 51161\n" +
+                "Unconfirmed    : 384\n" +
+                "Positivity rate: 3.05%\n" +
+                "Last updated   : 26/04/2020\n" +
+                "</pre>\n" +
+                "<b>District-wise breakup (today)</b>\n" +
+                "5 new cases, 3 deaths, 19 recoveries in East Delhi\n";
+        AtomicReference<String> actualSummaryBlock = new AtomicReference<>("");
+
+        List<StatewiseDelta> deltas = singletonList(new StatewiseDelta(9L, 4L, 15L, 455L, 157L, 5341L, "", "Delhi"));
+        List<StatewiseDelta> dailies = singletonList(new StatewiseDelta(9L, 4L, 15L, 0L, 0L, 0L, "", "Delhi"));
+        List<DistrictwiseData> districts = singletonList(new DistrictwiseData("Delhi", "East Delhi", "38", "38", "0", "0", "5", "19", "3", ""));
+        Map<String, String> doublingRates = new HashMap<>();
+        doublingRates.put("Delhi", "250");
+        Map<String, StatewiseTestData> testing = new HashMap<>();
+        testing.put("Delhi", new StatewiseTestData("51161", "", "", "", "", "1621", "", "", "Delhi", "", "", "", "", "53166", "384", "26/04/2020", "19462", "38"));
+        Map<String, List<DistrictwiseData>> districtsData = new HashMap<>();
+        districtsData.put("Delhi", districts);
+
+        buildSummaryAlertBlock(actualSummaryBlock, deltas, dailies, testing, doublingRates, districtsData);
 
         assertEquals(expectedSummaryBlock, actualSummaryBlock.get(), "Summary block is not structured correctly!");
     }

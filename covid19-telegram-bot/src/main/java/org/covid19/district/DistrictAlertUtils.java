@@ -11,7 +11,7 @@ import static java.lang.Long.parseLong;
 public class DistrictAlertUtils {
     public static String buildDistrictwiseAlert(List<DistrictwiseData> deltas, List<DistrictwiseData> dailies) {
         AtomicReference<String> alertText = new AtomicReference<>("");
-        deltas.forEach(delta -> buildDistrictAlertLine(alertText, delta));
+        deltas.forEach(delta -> buildDistrictDeltaAlertLine(alertText, delta));
         if (alertText.get().isEmpty() || "\n".equalsIgnoreCase(alertText.get())) {
             LOG.info("No useful update to alert on. Skipping...");
             return "";
@@ -21,7 +21,7 @@ public class DistrictAlertUtils {
         return alertText.get();
     }
 
-    public static void buildDistrictAlertLine(AtomicReference<String> updateText, DistrictwiseData delta) {
+    public static void buildDistrictDeltaAlertLine(AtomicReference<String> updateText, DistrictwiseData delta) {
         boolean confirmed = false, deaths = false, include = false;
         String textLine = "";
         if (parseLong(delta.getDeltaConfirmed()) > 0L) {

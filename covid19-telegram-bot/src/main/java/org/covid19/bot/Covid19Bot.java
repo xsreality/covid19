@@ -31,12 +31,14 @@ import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import java.io.ByteArrayInputStream;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;
+import static org.covid19.bot.BotUtils.buildDistrictZoneText;
 import static org.covid19.bot.BotUtils.translateName;
 import static org.telegram.abilitybots.api.objects.Flag.MESSAGE;
 import static org.telegram.abilitybots.api.objects.Locality.ALL;
@@ -726,6 +728,101 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
                 .next(westIndiaFlow)
                 .next(southIndiaFlow)
                 .build();
+    }
+
+    public ReplyFlow requestAnyZoneFlow() {
+        final ReplyFlow northIndiaFlow = ReplyFlow.builder(db, 120)
+                .action(upd -> {
+                    EditMessageText msg = buildNorthIndianStatesKeyboard(upd);
+                    silent.execute(msg);
+                })
+                .onlyIf(isCallbackOrMessage("North India"))
+                .next(fetchZoneInfo(isAnyState()))
+                .build();
+
+        final ReplyFlow centralIndiaFlow = ReplyFlow.builder(db, 120)
+                .action(upd -> {
+                    EditMessageText msg = buildCentralIndianStatesKeyboard(upd);
+                    silent.execute(msg);
+                })
+                .onlyIf(isCallbackOrMessage("Central India"))
+                .next(fetchZoneInfo(isAnyState()))
+                .build();
+
+        final ReplyFlow eastIndiaFlow = ReplyFlow.builder(db, 120)
+                .action(upd -> {
+                    EditMessageText msg = buildEastIndianStatesKeyboard(upd);
+                    silent.execute(msg);
+                })
+                .onlyIf(isCallbackOrMessage("East India"))
+                .next(fetchZoneInfo(isAnyState()))
+                .build();
+
+        final ReplyFlow northEastIndiaFlow = ReplyFlow.builder(db, 120)
+                .action(upd -> {
+                    EditMessageText msg = buildNorthEastIndianStatesKeyboard(upd);
+                    silent.execute(msg);
+                })
+                .onlyIf(isCallbackOrMessage("North East India"))
+                .next(fetchZoneInfo(isAnyState()))
+                .build();
+
+        final ReplyFlow westIndiaFlow = ReplyFlow.builder(db, 120)
+                .action(upd -> {
+                    EditMessageText msg = buildWestIndianStatesKeyboard(upd);
+                    silent.execute(msg);
+                })
+                .onlyIf(isCallbackOrMessage("West India"))
+                .next(fetchZoneInfo(isAnyState()))
+                .build();
+
+        final ReplyFlow southIndiaFlow = ReplyFlow.builder(db, 120)
+                .action(upd -> {
+                    EditMessageText msg = buildSouthIndianStatesKeyboard(upd);
+                    silent.execute(msg);
+                })
+                .onlyIf(isCallbackOrMessage("South India"))
+                .next(fetchZoneInfo(isAnyState()))
+                .build();
+
+        return ReplyFlow.builder(db, 110)
+                .action(update -> {
+                    SendMessage msg = buildRegionKeyboard(getChatId(update), false);
+                    silent.execute(msg);
+                })
+                .onlyIf(isCallbackOrMessage("/zones"))
+                .next(northIndiaFlow)
+                .next(centralIndiaFlow)
+                .next(eastIndiaFlow)
+                .next(northEastIndiaFlow)
+                .next(westIndiaFlow)
+                .next(southIndiaFlow)
+                .build();
+    }
+
+    private Reply fetchZoneInfo(Predicate<Update> predicate) {
+        return Reply.of(upd -> {
+            String chatId = String.valueOf(upd.getCallbackQuery().getMessage().getChatId());
+            String state = upd.getCallbackQuery().getData();
+            final Map<String, String> districtZones = storesManager.districtZonesFor(state);
+
+            // remove the inline keyboard
+            DeleteMessage msg = new DeleteMessage();
+            msg.setChatId(getChatId(upd));
+            msg.setMessageId(upd.getCallbackQuery().getMessage().getMessageId());
+            silent.execute(msg);
+
+            SendMessage telegramMessage = new SendMessage()
+                    .setChatId(chatId)
+                    .setText(buildDistrictZoneText(state, districtZones))
+                    .enableHtml(true);
+            silent.execute(telegramMessage);
+
+            // update on Bot channel
+            String message = String.format("User %s (%d) requested zones of %s",
+                    translateName(upd.getCallbackQuery().getMessage().getChat()), upd.getCallbackQuery().getMessage().getChatId(), state);
+            silent.send(message, CHANNEL_ID);
+        }, predicate);
     }
 
     public ReplyFlow requestAnyStateFlow() {

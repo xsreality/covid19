@@ -306,4 +306,29 @@ public class BotUtils {
         return buildStateSummaryAlertText(sortedStats, lastUpdated, daily);
     }
 
+    public static String buildDistrictZoneText(String state, Map<String, String> districtZones) {
+        String text = String.format("<b>Districts of %s</b>\n\n", state);
+        for (String district : districtZones.keySet()) {
+            text = text.concat(String.format("%s   %s\n", zoneSmiley(districtZones.get(district)), district));
+        }
+        return text.concat("\nhttps://twitter.com/pib_india/status/1256468081896878080");
+    }
+
+    private static String zoneSmiley(String zone) {
+        String orangeSmiley = "\ud83d\udd36";
+        String redSmiley = "\ud83d\udd34";
+        String greenSmiley = "\ud83d\udc9a";
+        String unknownSmiley = "\u2753";
+
+        if ("GREEN".equalsIgnoreCase(zone)) {
+            return greenSmiley;
+        }
+        if ("RED".equalsIgnoreCase(zone)) {
+            return redSmiley;
+        }
+        if ("ORANGE".equalsIgnoreCase(zone)) {
+            return orangeSmiley;
+        }
+        return unknownSmiley;
+    }
 }

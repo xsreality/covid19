@@ -10,15 +10,17 @@ To subscribe, just send the command `/start`. To unsubscribe, send the command `
 
 ## New Features
 
-1. Testing data is included in every on-demand update if available. This includes tests done, positive, negative and positivity rate.
-2. District updates are included.
-3. All updates carry news sources (links to State Govt / ANI tweets).
-4. Updates include `Doubling rate` based on previous day statistics.
-5. New commands: `/today`, `/summary` and `/total`. See below for more details.
-6. Get charts ang graphs with command `/charts`
+1. Get latest zones information of all districts with `/zones`.
+2. Testing data is included in every on-demand update if available. This includes tests done, positive, negative and positivity rate.
+3. District updates are included.
+4. All updates carry news sources (links to State Govt / ANI tweets).
+5. Updates include `Doubling rate` based on previous day statistics.
+6. New commands: `/today`, `/summary` and `/total`. See below for more details.
+7. Get charts ang graphs with command `/charts`
 
 Below is an example of an alert sent by the bot:
 
+![Zones alert screenshot](https://i.ibb.co/Rpx7FZC/Screenshot-20200502-163349.jpg "Zones Alert Screenshot")
 ![Sample Telegram Bot Alert screenshot](https://i.ibb.co/0m64BzC/Screenshot-20200501-173204.jpg "Sample Telegram alert")
 ![Sample Telegram Bot Statewise Alert screenshot](https://i.ibb.co/hRw0Qt1/Screenshot-20200423-190044.jpg "Statewise alert")
 
@@ -62,6 +64,8 @@ Stop receiving updates.
 #### `/today` - Get today's increase of all Indian States
 
 #### `/total` - Get total count across India
+
+#### `/zones` - Get zones information for any district
 
 To get the current statistics of any Indian State or Total, send the command `/stats`.
 

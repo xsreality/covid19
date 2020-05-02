@@ -105,6 +105,14 @@ public class KafkaStreamsConfig {
     }
 
     @Bean
+    public KTable<StateAndDistrict, String> districtZonesTable(StreamsBuilder streamsBuilder) {
+        return streamsBuilder.table("zones",
+                Materialized.<StateAndDistrict, String, KeyValueStore<Bytes, byte[]>>as(
+                        Stores.persistentKeyValueStore("zones-persistent").name())
+                        .withKeySerde(new StateAndDistrictSerde()).withValueSerde(stringSerde).withLoggingDisabled());
+    }
+
+    @Bean
     public KTable<String, UserPrefs> userPrefsTable(StreamsBuilder streamsBuilder) {
         return streamsBuilder.table("user-preferences",
                 Materialized.<String, UserPrefs, KeyValueStore<Bytes, byte[]>>as(

@@ -17,7 +17,10 @@ import org.springframework.kafka.config.StreamsBuilderFactoryBean;
 import java.time.Instant;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -38,6 +41,7 @@ public class StateStoresManager {
     private ReadOnlyKeyValueStore<String, StatewiseDelta> dailyStatsStore;
     private ReadOnlyKeyValueStore<StateAndDistrict, DistrictwiseData> districtDailyStore;
     private ReadOnlyKeyValueStore<StateAndDistrict, DistrictwiseData> districtDeltaStore;
+    private ReadOnlyKeyValueStore<StateAndDistrict, String> districtZonesStore;
     private ReadOnlyKeyValueStore<String, StatewiseDelta> deltaStatsStore;
     private ReadOnlyKeyValueStore<String, UserPrefs> userPrefsStore;
     private ReadOnlyKeyValueStore<String, String> newsSourcesStore;
@@ -75,12 +79,14 @@ public class StateStoresManager {
                                     KTable<StateAndDate, StatewiseTestData> stateTestTable,
                                     KTable<String, byte[]> visualizationsTable,
                                     KTable<StateAndDistrict, DistrictwiseData> districtDailyTable,
-                                    KTable<StateAndDistrict, DistrictwiseData> districtDeltaTable) {
+                                    KTable<StateAndDistrict, DistrictwiseData> districtDeltaTable,
+                                    KTable<StateAndDistrict, String> districtZonesTable) {
         return args -> {
             latch(fb).await(100, TimeUnit.SECONDS);
             dailyStatsStore = fb.getKafkaStreams().store(dailyStatsTable.queryableStoreName(), QueryableStoreTypes.keyValueStore());
             districtDailyStore = fb.getKafkaStreams().store(districtDailyTable.queryableStoreName(), QueryableStoreTypes.keyValueStore());
             districtDeltaStore = fb.getKafkaStreams().store(districtDeltaTable.queryableStoreName(), QueryableStoreTypes.keyValueStore());
+            districtZonesStore = fb.getKafkaStreams().store(districtZonesTable.queryableStoreName(), QueryableStoreTypes.keyValueStore());
             deltaStatsStore = fb.getKafkaStreams().store(deltaStatsTable.queryableStoreName(), QueryableStoreTypes.keyValueStore());
             userPrefsStore = fb.getKafkaStreams().store(userPrefsTable.queryableStoreName(), QueryableStoreTypes.keyValueStore());
             newsSourcesStore = fb.getKafkaStreams().store(newsSourcesTable.queryableStoreName(), QueryableStoreTypes.keyValueStore());
@@ -144,6 +150,19 @@ public class StateStoresManager {
 
     public DistrictwiseData dailyStatsForStateAndDistrict(String state, String district) {
         return districtDailyStore.get(new StateAndDistrict(state, district));
+    }
+
+    public Map<String, String> districtZonesFor(String state) {
+        final KeyValueIterator<StateAndDistrict, String> all = districtZonesStore.all();
+        Map<String, String> data = new LinkedHashMap<>();
+        while (all.hasNext()) {
+            final KeyValue<StateAndDistrict, String> next = all.next();
+            if (!state.equalsIgnoreCase(next.key.getState())) {
+                continue;
+            }
+            data.put(next.key.getDistrict(), next.value);
+        }
+        return data;
     }
 
     public StatewiseDelta deltaStatsForState(String state) {

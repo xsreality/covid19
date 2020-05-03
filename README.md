@@ -11,12 +11,13 @@ To subscribe, just send the command `/start`. To unsubscribe, send the command `
 ## New Features
 
 1. Get latest zones information of all districts with `/zones`.
-2. Testing data is included in every on-demand update if available. This includes tests done, positive, negative and positivity rate.
-3. District updates are included.
-4. All updates carry news sources (links to State Govt / ANI tweets).
-5. Updates include `Doubling rate` based on previous day statistics.
-6. New commands: `/today`, `/summary` and `/total`. See below for more details.
-7. Get charts ang graphs with command `/charts`
+2. Get latest numbers of all districts with `/district`.
+3. Testing data is included in every on-demand update if available. This includes tests done, positive, negative and positivity rate.
+4. District updates are included.
+5. All updates carry news sources (links to State Govt / ANI tweets).
+6. Updates include `Doubling rate` based on previous day statistics.
+7. New commands: `/today`, `/summary` and `/total`. See below for more details.
+8. Get charts ang graphs with command `/charts`
 
 Below is an example of an alert sent by the bot:
 
@@ -66,6 +67,8 @@ Stop receiving updates.
 #### `/total` - Get total count across India
 
 #### `/zones` - Get zones information for any district
+
+#### `/district` - Get latest numbers for any district
 
 To get the current statistics of any Indian State or Total, send the command `/stats`.
 

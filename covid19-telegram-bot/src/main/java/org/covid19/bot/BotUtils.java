@@ -277,6 +277,28 @@ public class BotUtils {
         return text;
     }
 
+    public static String buildDistrictSummaryAlertText(String state, List<DistrictwiseData> districts) {
+        String text = String.format("Summary of all districts of %s\n\n", state);
+        text = text.concat("<pre>\n");
+        text = text.concat("District         | Conf| Rec.| Died\n");
+        text = text.concat("-----------------------------------\n");
+        for (DistrictwiseData district : districts) {
+            text = text.concat(String.format("%-17s|%5s|%5s|%5s\n",
+                    fixedLength(district.getDistrict(), 17),
+                    district.getConfirmed(), district.getRecovered(), district.getDeceased()));
+        }
+        text = text.concat("-----------------------------------\n");
+        text = text.concat("</pre>");
+        return text;
+    }
+
+    private static String fixedLength(String text, int maxLength) {
+        if (text.length() > maxLength) {
+            return text.substring(0, maxLength);
+        }
+        return text;
+    }
+
     public static String translateName(Chat chat) {
         if (nonNull(chat.getFirstName())) {
             if (nonNull(chat.getLastName())) {

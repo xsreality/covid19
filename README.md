@@ -22,7 +22,9 @@ To subscribe, just send the command `/start`. To unsubscribe, send the command `
 Below is an example of an alert sent by the bot:
 
 ![Zones alert screenshot](https://i.ibb.co/Rpx7FZC/Screenshot-20200502-163349.jpg "Zones Alert Screenshot")
+![Charts screenshot](https://i.ibb.co/d61FKSy/Screenshot-20200503-143848.jpg "Charts Screenshot")
 ![Sample Telegram Bot Alert screenshot](https://i.ibb.co/0m64BzC/Screenshot-20200501-173204.jpg "Sample Telegram alert")
+![District screenshot](https://i.ibb.co/wBvPxxV/Screenshot-20200503-143649.jpg "District screenshot")
 ![Sample Telegram Bot Statewise Alert screenshot](https://i.ibb.co/hRw0Qt1/Screenshot-20200423-190044.jpg "Statewise alert")
 
 ## Alert Updates

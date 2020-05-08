@@ -107,4 +107,9 @@ The Python script that imports the Covid19India API is available here: https://g
 
 * Contributions for new ideas and open issues are welcome!
 * Please open a GitHub issue before opening a pull request.
-* For any queries, contact me on Telegram at https://t.me/xsreality  
+* For any queries, contact me on Telegram at https://t.me/xsreality
+
+## Credits
+
+* Team behind Covid19India for gathering statistics across India and providing API. https://www.covid19india.org/
+* GeoIQ for providing API for location based Covid19 information. https://www.geoiq.io/covid19.html

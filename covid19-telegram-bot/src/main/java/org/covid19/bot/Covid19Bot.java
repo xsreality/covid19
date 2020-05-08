@@ -28,7 +28,10 @@ import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageTe
 import org.telegram.telegrambots.meta.api.objects.Location;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.KeyboardButton;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.KeyboardRow;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import java.io.ByteArrayInputStream;
@@ -171,6 +174,7 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
                     String msg = "Send /stats to get latest count of any State or Total\n\n" +
                             "Send /mystate to choose your preferred state and receive updates automatically.\n\n" +
                             "Send /district to get latest district numbers of any state.\n\n" +
+                            "SSend /location to get zone information of your location.\n\n" +
                             "Send /zones to get latest red, orange, green zones of any district\n\n" +
                             "Send /charts to get different charts and visualizations.\n\n";
                     silent.send(msg, ctx.chatId());
@@ -178,7 +182,21 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
                 .build();
     }
 
-    @SuppressWarnings("unused")
+    public Ability location() {
+        return Ability.builder()
+                .name("location").info("Get information about your location")
+                .privacy(PUBLIC).locality(ALL).input(0)
+                .action(ctx -> {
+                    KeyboardButton button = new KeyboardButton().setRequestLocation(true).setText("Send current location");
+                    KeyboardRow row = new KeyboardRow();
+                    row.add(button);
+                    ReplyKeyboardMarkup markup = new ReplyKeyboardMarkup().setKeyboard(singletonList(row)).setOneTimeKeyboard(true).setResizeKeyboard(true);
+                    SendMessage msg = new SendMessage().setReplyMarkup(markup).setChatId(ctx.chatId()).setText("Requesting location...");
+                    silent.execute(msg);
+                })
+                .build();
+    }
+
     public Ability subscribe() {
         return Ability
                 .builder()

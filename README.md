@@ -10,20 +10,22 @@ To subscribe, just send the command `/start`. To unsubscribe, send the command `
 
 ## New Features
 
-1. Get latest zones information of all districts with `/zones`.
-2. Get latest numbers of all districts with `/district`.
-3. Testing data is included in every on-demand update if available. This includes tests done, positive, negative and positivity rate.
-4. District updates are included.
-5. All updates carry news sources (links to State Govt / ANI tweets).
-6. Updates include `Doubling rate` based on previous day statistics.
-7. New commands: `/today`, `/summary` and `/total`. See below for more details.
-8. Get charts ang graphs with command `/charts`
+1. Send `/location` to get information about your area.
+2. Get latest zones information of all districts with `/zones`.
+3. Get latest numbers of all districts with `/district`.
+4. Testing data is included in every on-demand update if available. This includes tests done, positive, negative and positivity rate.
+5. District updates are included.
+6. All updates carry news sources (links to State Govt / ANI tweets).
+7. Updates include `Doubling rate` based on previous day statistics.
+8. New commands: `/today`, `/summary` and `/total`. See below for more details.
+9. Get charts ang graphs with command `/charts`
 
 Below is an example of an alert sent by the bot:
 
 ![Zones alert screenshot](https://i.ibb.co/Rpx7FZC/Screenshot-20200502-163349.jpg "Zones Alert Screenshot")
 ![Charts screenshot](https://i.ibb.co/d61FKSy/Screenshot-20200503-143848.jpg "Charts Screenshot")
 ![Sample Telegram Bot Alert screenshot](https://i.ibb.co/0m64BzC/Screenshot-20200501-173204.jpg "Sample Telegram alert")
+![Location screenshot](https://i.ibb.co/D9z8GxG/Screenshot-20200508-200113.jpg "Location screenshot")
 ![District screenshot](https://i.ibb.co/wBvPxxV/Screenshot-20200503-143649.jpg "District screenshot")
 ![Sample Telegram Bot Statewise Alert screenshot](https://i.ibb.co/hRw0Qt1/Screenshot-20200423-190044.jpg "Statewise alert")
 

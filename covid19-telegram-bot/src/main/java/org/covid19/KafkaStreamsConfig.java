@@ -132,8 +132,8 @@ public class KafkaStreamsConfig {
     public KTable<StateAndDate, StatewiseDelta> dailyCountTable(StreamsBuilder streamsBuilder) {
         return streamsBuilder.table("daily-states-count",
                 Materialized.<StateAndDate, StatewiseDelta, KeyValueStore<Bytes, byte[]>>as(
-                        Stores.persistentKeyValueStore("daily-states-count-persistent").name())
-                        .withKeySerde(new StateAndDateSerde()).withValueSerde(new StatewiseDeltaSerde()).withCachingDisabled());
+                        Stores.inMemoryKeyValueStore("daily-states-count-inmemory").name())
+                        .withKeySerde(new StateAndDateSerde()).withValueSerde(new StatewiseDeltaSerde()));
     }
 
     @Bean

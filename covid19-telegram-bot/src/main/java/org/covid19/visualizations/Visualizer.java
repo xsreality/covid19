@@ -224,6 +224,7 @@ public class Visualizer {
         List<Long> deceased = new ArrayList<>();
         data.forEach((day, delta) -> {
             if (isNull(delta)) {
+                LOG.info("Found null delta for {}", day);
                 return;
             }
             totalCases.add(delta.getCurrentConfirmed());
@@ -239,7 +240,7 @@ public class Visualizer {
                 new ChartDataset("Deceased", deceased, RED)));
 
         final String historyTrendRequestJson = visualizationService.buildVisualizationRequest("line", days, datasets, false);
-        LOG.info("Request for 2 weeks cumulative chart ready: {}", historyTrendRequestJson);
+        LOG.info("Request for history trend chart ready: {}", historyTrendRequestJson);
         byte[] historyTrendImage = visualizationService.buildVisualization(historyTrendRequestJson);
         chartsKafkaTemplate.send("visualizations", HISTORY_TREND, historyTrendImage);
     }

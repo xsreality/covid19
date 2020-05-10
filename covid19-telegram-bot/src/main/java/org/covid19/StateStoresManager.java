@@ -17,7 +17,6 @@ import org.springframework.kafka.config.StreamsBuilderFactoryBean;
 import java.time.Instant;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -34,6 +33,7 @@ import static org.covid19.visualizations.Visualizer.HISTORY_TREND;
 import static org.covid19.visualizations.Visualizer.LAST_SEVEN_DAYS_OVERVIEW;
 import static org.covid19.visualizations.Visualizer.LAST_TWO_WEEKS_TOTAL;
 import static org.covid19.visualizations.Visualizer.STATES_TREND;
+import static org.covid19.visualizations.Visualizer.TESTING_TREND;
 
 @Slf4j
 @Configuration
@@ -242,5 +242,9 @@ public class StateStoresManager {
 
     public byte[] historyTrend() {
         return visualizationsStore.get(HISTORY_TREND);
+    }
+
+    public byte[] testingTrend() {
+        return visualizationsStore.get(TESTING_TREND);
     }
 }

@@ -295,6 +295,7 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
                 .next(replyWithTotalChart())
                 .next(replyWithDoublingRateChart())
                 .next(replyWithStatesTrendChart())
+                .next(replyWithTestingTrendChart())
                 .next(replyWithHistoryTrendChart())
                 .build();
     }
@@ -317,6 +318,7 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
         keyboard.add(row);
 
         row = new ArrayList<>();
+        row.add(new InlineKeyboardButton().setText("Testing Trend").setCallbackData("Testing Trend"));
         row.add(new InlineKeyboardButton().setText("History Trend").setCallbackData("History Trend"));
         keyboard.add(row);
 
@@ -443,6 +445,30 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
                 LOG.error("Error sending chart", e);
             }
         }, isCallbackOrMessage("History Trend"));
+    }
+
+    private Reply replyWithTestingTrendChart() {
+        return Reply.of(upd -> {
+            byte[] image = this.storesManager.testingTrend();
+            SendPhoto photo = new SendPhoto().setPhoto("Testing Trend", new ByteArrayInputStream(image)).setChatId(getChatId(upd));
+            try {
+                // remove the inline keyboard
+                DeleteMessage msg = new DeleteMessage();
+                msg.setChatId(getChatId(upd));
+                msg.setMessageId(upd.getCallbackQuery().getMessage().getMessageId());
+                silent.execute(msg);
+
+                // send the visualization
+                sender.sendPhoto(photo);
+
+                // update on Bot channel
+                String message = String.format("User %s (%d) requested Testing Trend chart",
+                        translateName(upd.getCallbackQuery().getMessage().getChat()), upd.getCallbackQuery().getMessage().getChatId());
+                silent.send(message, CHANNEL_ID);
+            } catch (TelegramApiException e) {
+                LOG.error("Error sending chart", e);
+            }
+        }, isCallbackOrMessage("Testing Trend"));
     }
 
     @SuppressWarnings("unused")
@@ -605,6 +631,8 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
                         visualizer.top5StatesTrend();
                         Thread.sleep(1000);
                         visualizer.historyTrend();
+                        Thread.sleep(1000);
+                        visualizer.testingTrend();
                     } catch (InterruptedException e) {
                         // ignore
                     }

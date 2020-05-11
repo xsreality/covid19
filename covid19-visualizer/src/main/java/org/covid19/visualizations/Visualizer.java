@@ -325,7 +325,7 @@ public class Visualizer {
         });
 
         ChartData chartData = new ChartData(
-                new ArrayList<>(dailyTestedData.keySet()),
+                new ArrayList<>(days),
                 asList(new ChartDataset("bar", "Positive", dailyPositive, RED, "left-y-axis"),
                         new ChartDataset("bar", "Tested", dailyTested, GREEN, "left-y-axis"),
                         new ChartDataset("line", "5-day Moving Positivity rate", positivityRate, BLUE, "right-y-axis")));

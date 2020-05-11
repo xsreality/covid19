@@ -11,23 +11,14 @@ import org.covid19.district.StateAndDistrict;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.kafka.config.StreamsBuilderFactoryBean;
 
-import java.time.Instant;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import lombok.extern.slf4j.Slf4j;
-
-import static java.time.ZoneId.of;
-import static java.time.temporal.ChronoUnit.DAYS;
-import static java.util.Objects.isNull;
 
 @Slf4j
 @Configuration
@@ -37,26 +28,10 @@ public class StateStoresManager {
     private ReadOnlyKeyValueStore<StateAndDistrict, DistrictwiseData> districtDeltaStore;
     private ReadOnlyKeyValueStore<StateAndDistrict, String> districtZonesStore;
     private ReadOnlyKeyValueStore<String, StatewiseDelta> deltaStatsStore;
-    private ReadOnlyKeyValueStore<String, UserPrefs> userPrefsStore;
-    private ReadOnlyKeyValueStore<String, String> newsSourcesStore;
     private ReadOnlyKeyValueStore<StateAndDate, String> doublingRateStore;
     private ReadOnlyKeyValueStore<StateAndDate, StatewiseDelta> dailyCountStore;
     private ReadOnlyKeyValueStore<StateAndDate, StatewiseTestData> stateTestStore;
     private ReadOnlyKeyValueStore<String, byte[]> visualizationsStore;
-
-    public static final String LAST_SEVEN_DAYS_OVERVIEW = "last7daysoverview";
-    public static final String LAST_TWO_WEEKS_TOTAL = "last2weekstotal";
-    public static final String DOUBLING_RATE = "doublingrate";
-    public static final String STATES_TREND = "top5statestrend";
-    public static final String HISTORY_TREND = "historytrend";
-    public static final String TESTING_TREND = "testingtotal";
-
-    private KafkaListenerEndpointRegistry registry;
-    DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy").withZone(of("UTC"));
-
-    public StateStoresManager(@SuppressWarnings("SpringJavaInjectionPointsAutowiringInspection") KafkaListenerEndpointRegistry registry) {
-        this.registry = registry;
-    }
 
     @Bean
     public CountDownLatch latch(StreamsBuilderFactoryBean fb) {
@@ -74,7 +49,6 @@ public class StateStoresManager {
                                     KTable<String, StatewiseDelta> dailyStatsTable,
                                     KTable<String, StatewiseDelta> deltaStatsTable,
                                     KTable<String, UserPrefs> userPrefsTable,
-                                    KTable<String, String> newsSourcesTable,
                                     KTable<StateAndDate, String> doublingRateTable,
                                     KTable<StateAndDate, StatewiseDelta> dailyCountTable,
                                     KTable<StateAndDate, StatewiseTestData> stateTestTable,
@@ -89,17 +63,9 @@ public class StateStoresManager {
             districtDeltaStore = fb.getKafkaStreams().store(districtDeltaTable.queryableStoreName(), QueryableStoreTypes.keyValueStore());
             districtZonesStore = fb.getKafkaStreams().store(districtZonesTable.queryableStoreName(), QueryableStoreTypes.keyValueStore());
             deltaStatsStore = fb.getKafkaStreams().store(deltaStatsTable.queryableStoreName(), QueryableStoreTypes.keyValueStore());
-            userPrefsStore = fb.getKafkaStreams().store(userPrefsTable.queryableStoreName(), QueryableStoreTypes.keyValueStore());
-            newsSourcesStore = fb.getKafkaStreams().store(newsSourcesTable.queryableStoreName(), QueryableStoreTypes.keyValueStore());
-            newsSourcesStore = fb.getKafkaStreams().store(newsSourcesTable.queryableStoreName(), QueryableStoreTypes.keyValueStore());
             doublingRateStore = fb.getKafkaStreams().store(doublingRateTable.queryableStoreName(), QueryableStoreTypes.keyValueStore());
             dailyCountStore = fb.getKafkaStreams().store(dailyCountTable.queryableStoreName(), QueryableStoreTypes.keyValueStore());
             stateTestStore = fb.getKafkaStreams().store(stateTestTable.queryableStoreName(), QueryableStoreTypes.keyValueStore());
-            visualizationsStore = fb.getKafkaStreams().store(visualizationsTable.queryableStoreName(), QueryableStoreTypes.keyValueStore());
-            // start consumers only after state store is ready.
-            registry.getListenerContainer("statewiseAlertsConsumer").start();
-            registry.getListenerContainer("userRequestsConsumer").start();
-            registry.getListenerContainer("districtwiseAlertsConsumer").start();
         };
     }
 
@@ -109,10 +75,6 @@ public class StateStoresManager {
 
     public KeyValueIterator<String, StatewiseDelta> deltaStats() {
         return deltaStatsStore.all();
-    }
-
-    public KeyValueIterator<String, UserPrefs> userPrefs() {
-        return userPrefsStore.all();
     }
 
     public StatewiseDelta dailyStatsForState(String state) {
@@ -153,31 +115,6 @@ public class StateStoresManager {
         return districtDailyStore.get(new StateAndDistrict(state, district));
     }
 
-    public Map<String, String> districtZonesFor(String state) {
-        final KeyValueIterator<StateAndDistrict, String> all = districtZonesStore.all();
-        Map<String, String> data = new LinkedHashMap<>();
-        while (all.hasNext()) {
-            final KeyValue<StateAndDistrict, String> next = all.next();
-            if (!state.equalsIgnoreCase(next.key.getState())) {
-                continue;
-            }
-            data.put(next.key.getDistrict(), next.value);
-        }
-        return data;
-    }
-
-    public StatewiseDelta deltaStatsForState(String state) {
-        return deltaStatsStore.get(state);
-    }
-
-    public UserPrefs prefsForUser(String userId) {
-        return userPrefsStore.get(userId);
-    }
-
-    public String newsSourceFor(String state) {
-        return newsSourcesStore.get(state);
-    }
-
     public String doublingRateFor(String state, String date) {
         return doublingRateStore.get(new StateAndDate(date, state));
     }
@@ -204,48 +141,5 @@ public class StateStoresManager {
 
     public StatewiseTestData testDataFor(String state, String date) {
         return stateTestStore.get(new StateAndDate(date, state));
-    }
-
-    /**
-     * Iterate through the testing data store from today in reverse chronological order until data
-     * is found within the past 14 days.
-     *
-     * @param state Indian state to search testing data for
-     * @return Testing data
-     */
-    public StatewiseTestData latestAvailableTestDataFor(String state) {
-        StatewiseTestData testData;
-        long deltaDays = 0L;
-        do {
-            testData = testDataFor(state, dateTimeFormatter.format(Instant.now().minus(deltaDays++, DAYS)));
-            if (deltaDays >= 14L) {
-                break; // don't bother beyond 2 weeks
-            }
-        } while (isNull(testData));
-        return testData;
-    }
-
-    public byte[] lastWeekOverview() {
-        return visualizationsStore.get(LAST_SEVEN_DAYS_OVERVIEW);
-    }
-
-    public byte[] lastTwoWeeksTotal() {
-        return visualizationsStore.get(LAST_TWO_WEEKS_TOTAL);
-    }
-
-    public byte[] doublingRate() {
-        return visualizationsStore.get(DOUBLING_RATE);
-    }
-
-    public byte[] statesTrend() {
-        return visualizationsStore.get(STATES_TREND);
-    }
-
-    public byte[] historyTrend() {
-        return visualizationsStore.get(HISTORY_TREND);
-    }
-
-    public byte[] testingTrend() {
-        return visualizationsStore.get(TESTING_TREND);
     }
 }

@@ -7,7 +7,6 @@ import org.covid19.UserPrefs;
 import org.covid19.UserRequest;
 import org.covid19.district.DistrictwiseData;
 import org.covid19.location.UserLocation;
-import org.covid19.visualizations.Visualizer;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -95,7 +94,6 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
     private KafkaTemplate<String, UserLocation> userLocationKafkaTemplate;
     private KafkaTemplate<String, UserPrefs> userPrefsKafkaTemplate;
     private StateStoresManager storesManager;
-    private Visualizer visualizer;
 
     public Covid19Bot(String botToken, String botUsername, DBContext db, String creatorId, String channelId) {
         super(botToken, botUsername, db);
@@ -618,29 +616,6 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
                 .build();
     }
 
-    public Ability refresh() {
-        return Ability
-                .builder().name("refresh").info("Trigger refresh of all charts")
-                .locality(USER).privacy(CREATOR).input(0)
-                .action(ctx -> {
-                    try {
-                        visualizer.dailyAndTotalCharts();
-                        Thread.sleep(1000);
-                        visualizer.doublingRateChart();
-                        Thread.sleep(1000);
-                        visualizer.top5StatesTrend();
-                        Thread.sleep(1000);
-                        visualizer.historyTrend();
-                        Thread.sleep(1000);
-                        visualizer.testingTrend();
-                    } catch (InterruptedException e) {
-                        // ignore
-                    }
-                    silent.send("Refresh of charts triggered", ctx.chatId());
-                })
-                .build();
-    }
-
     public List<String> subscribedUsers() {
         return db.getList(SUBSCRIBED_USERS);
     }
@@ -650,7 +625,6 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
         this.appCtx = applicationContext;
 
         this.storesManager = (StateStoresManager) appCtx.getBean("stateStoresManager");
-        this.visualizer = (Visualizer) appCtx.getBean("visualizer");
 
         //noinspection unchecked
         userRequestKafkaTemplate = (KafkaTemplate<String, UserRequest>) appCtx.getBean("userRequestKafkaTemplate");

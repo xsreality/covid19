@@ -1,0 +1,11 @@
+visualization:
+  url: http://localhost:8403
+
+spring:
+  kafka:
+    streams:
+      application-id: "org.covid19.visualizer"
+      client-id: "org.covid19.visualizer-client"
+      bootstrap-servers: "localhost:9092"
+      cache-max-size-buffering: 0
+      state-dir: "/tmp"

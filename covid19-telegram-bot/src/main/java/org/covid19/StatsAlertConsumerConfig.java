@@ -51,8 +51,8 @@ public class StatsAlertConsumerConfig {
     private final StateStoresManager stateStores;
     private static String TOTAL = "Total";
 
-    @Value("${telegram.tester.id}")
-    private String telegramTestUser;
+    @Value("${telegram.creator.id}")
+    private String tgCreator;
 
     public StatsAlertConsumerConfig(KafkaProperties kafkaProperties, Covid19Bot covid19Bot, StateStoresManager stateStores) {
         this.kafkaProperties = kafkaProperties;
@@ -138,10 +138,14 @@ public class StatsAlertConsumerConfig {
                 LOG.info("Skipping user {} because unsubscribed", userPref.getUserId());
                 return;
             }
-            if (userPref.getMyStates().isEmpty()) {
-                LOG.info("User {} has no preferred state. Sending alert...", userPref.getUserId());
+            if (tgCreator.equalsIgnoreCase(userPref.getUserId())) {
+                LOG.info("Special user {}. Sending alert...", userPref.getUserId());
                 // send alert for all states
                 sendTelegramAlert(covid19Bot, userPref.getUserId(), alertTextForAllStates, null, true);
+                return;
+            }
+            if (userPref.getMyStates().isEmpty()) {
+                LOG.info("User {} has no preferred state. Skipping...", userPref.getUserId());
                 return;
             }
 

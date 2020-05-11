@@ -9,6 +9,6 @@ import lombok.ToString;
 @AllArgsConstructor
 @NoArgsConstructor
 @Data
-public class ChartOption {
-    private ChartPlugin plugins;
+public class ChartTick {
+    private Boolean beginAtZero;
 }

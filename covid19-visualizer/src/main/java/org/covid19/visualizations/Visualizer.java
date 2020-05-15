@@ -18,6 +18,7 @@ import org.covid19.charts.ChartTick;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -39,6 +40,7 @@ import static java.util.Collections.singletonList;
 import static java.util.Objects.isNull;
 import static java.util.Objects.nonNull;
 
+@EnableScheduling
 @Component
 public class Visualizer {
     private static final Logger LOG = LoggerFactory.getLogger(Visualizer.class);
@@ -225,11 +227,11 @@ public class Visualizer {
         DateTimeFormatter monthDayFormatter = DateTimeFormatter.ofPattern("MMM dd").withZone(of("UTC"));
 
         final LocalDate startDate = dateTimeFormatter.parse("30/01/2020", LocalDate::from);// data available from here
-        final LocalDate yesterday = LocalDate.now().minus(1L, DAYS);
+        final LocalDate today = LocalDate.now();
         Map<String, StatewiseDelta> data = new LinkedHashMap<>();
 
         LocalDate date = startDate;
-        while (date.isBefore(yesterday)) {
+        while (date.isBefore(today)) {
             String fDate = dateTimeFormatter.format(date);
             String monthDay = monthDayFormatter.format(date);
             data.put(monthDay, stateStores.dailyCountFor("Total", fDate));
@@ -269,8 +271,8 @@ public class Visualizer {
         DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy").withZone(of("UTC"));
         DateTimeFormatter monthDayFormatter = DateTimeFormatter.ofPattern("MMM dd").withZone(of("UTC"));
 
-        final LocalDate startDate = dateTimeFormatter.parse("12/04/2020", LocalDate::from);// data available from here
-        final LocalDate yesterday = LocalDate.now().minus(1L, DAYS);
+        final LocalDate startDate = dateTimeFormatter.parse("01/04/2020", LocalDate::from);// data available from here
+        final LocalDate today = LocalDate.now();
         Map<String, StatewiseTestData> dailyTestedData = new LinkedHashMap<>();
         Map<String, StatewiseDelta> dailyPositiveData = new LinkedHashMap<>();
         Map<String, Double> fiveDayMovingAvgData = new LinkedHashMap<>();
@@ -278,7 +280,7 @@ public class Visualizer {
         DescriptiveStatistics subset = new DescriptiveStatistics(5);
 
         LocalDate date = startDate;
-        while (date.isBefore(yesterday)) {
+        while (date.isBefore(today)) {
             String fDate = dateTimeFormatter.format(date);
             String monthDay = monthDayFormatter.format(date);
             final StatewiseTestData tested = stateStores.testDataFor("Total", fDate);

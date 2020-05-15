@@ -130,7 +130,7 @@ public class UserRequestConsumer {
             alertText.accumulateAndGet(newsSource, (current, update) -> current + "\nSource: " + update);
         }
         if (!testing.isEmpty() && testing.containsKey(request.getState())) {
-            alertText.accumulateAndGet(testing.get(request.getState()).getSource(), (current, update) -> current + "\n\nTesting data source: " + update);
+            alertText.accumulateAndGet(fetchStateNewsSource(testing.get(request.getState())), (current, update) -> current + "\n\nTesting data source: " + update);
         }
 
         sendTelegramAlert(covid19Bot, request.getChatId(), alertText.get(), null, true);
@@ -143,5 +143,18 @@ public class UserRequestConsumer {
         String lastUpdated = stats.get(0).getLastUpdatedTime();
 
         return buildStateSummaryAlertText(stats, lastUpdated, true);
+    }
+
+    private static String fetchStateNewsSource(StatewiseTestData data) {
+        if (nonNull(data.getSource()) && !data.getSource().isEmpty()) {
+            return data.getSource();
+        }
+        if (nonNull(data.getSource1()) && !data.getSource1().isEmpty()) {
+            return data.getSource1();
+        }
+        if (nonNull(data.getSource2()) && !data.getSource2().isEmpty()) {
+            return data.getSource2();
+        }
+        return "Not available";
     }
 }

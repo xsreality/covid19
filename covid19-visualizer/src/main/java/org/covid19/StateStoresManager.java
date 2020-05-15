@@ -48,11 +48,9 @@ public class StateStoresManager {
     public ApplicationRunner runner(StreamsBuilderFactoryBean fb,
                                     KTable<String, StatewiseDelta> dailyStatsTable,
                                     KTable<String, StatewiseDelta> deltaStatsTable,
-                                    KTable<String, UserPrefs> userPrefsTable,
                                     KTable<StateAndDate, String> doublingRateTable,
                                     KTable<StateAndDate, StatewiseDelta> dailyCountTable,
                                     KTable<StateAndDate, StatewiseTestData> stateTestTable,
-                                    KTable<String, byte[]> visualizationsTable,
                                     KTable<StateAndDistrict, DistrictwiseData> districtDailyTable,
                                     KTable<StateAndDistrict, DistrictwiseData> districtDeltaTable,
                                     KTable<StateAndDistrict, String> districtZonesTable) {

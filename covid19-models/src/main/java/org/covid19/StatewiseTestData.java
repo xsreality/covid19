@@ -18,8 +18,9 @@ public class StatewiseTestData {
     @SerializedName("numisolationbeds") private String numIsolationBeds;
     @SerializedName("numventilators") private String numVentilators;
     private String positive;
-    private String source;
-    private String source2;
+    private String source; // data.json uses this one
+    private String source1; // state_test_data.json uses this one...
+    private String source2; // ...or this one
     private String state;
     @SerializedName("testpositivityrate") private String testPositivityRate;
     @SerializedName("testsperthousand") private String testsPerThousand;

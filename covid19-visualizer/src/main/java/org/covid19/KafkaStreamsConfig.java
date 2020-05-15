@@ -87,23 +87,15 @@ public class KafkaStreamsConfig {
         return streamsBuilder.table("zones",
                 Materialized.<StateAndDistrict, String, KeyValueStore<Bytes, byte[]>>as(
                         Stores.persistentKeyValueStore("zones-persistent").name())
-                        .withKeySerde(new StateAndDistrictSerde()).withValueSerde(stringSerde).withLoggingDisabled());
-    }
-
-    @Bean
-    public KTable<String, UserPrefs> userPrefsTable(StreamsBuilder streamsBuilder) {
-        return streamsBuilder.table("user-preferences",
-                Materialized.<String, UserPrefs, KeyValueStore<Bytes, byte[]>>as(
-                        Stores.inMemoryKeyValueStore("user-preferences-inmemory").name())
-                        .withKeySerde(Serdes.String()).withValueSerde(new UserPrefsSerde()).withCachingDisabled());
+                        .withKeySerde(new StateAndDistrictSerde()).withValueSerde(stringSerde));
     }
 
     @Bean
     public KTable<StateAndDate, String> doublingRateTable(StreamsBuilder streamsBuilder) {
         return streamsBuilder.table("doubling-rate",
                 Materialized.<StateAndDate, String, KeyValueStore<Bytes, byte[]>>as(
-                        Stores.inMemoryKeyValueStore("doubling-rate-inmemory").name())
-                        .withKeySerde(new StateAndDateSerde()).withValueSerde(stringSerde).withCachingDisabled());
+                        Stores.persistentKeyValueStore("doubling-rate-persistent").name())
+                        .withKeySerde(new StateAndDateSerde()).withValueSerde(stringSerde));
     }
 
     @Bean

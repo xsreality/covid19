@@ -108,7 +108,7 @@ public class AlertTextTests {
         Map<String, String> doublingRates = new HashMap<>();
         doublingRates.put("Delhi", "250");
         Map<String, StatewiseTestData> testing = new HashMap<>();
-        testing.put("Delhi", new StatewiseTestData("51161", "", "", "", "", "1621", "", "", "Delhi", "", "", "", "", "53166", "384", "26/04/2020", "19462", "38"));
+        testing.put("Delhi", new StatewiseTestData("51161", "", "", "", "", "1621", "", "", "", "Delhi", "", "", "", "", "53166", "384", "26/04/2020", "19462", "38"));
         buildSummaryAlertBlock(actualSummaryBlock, deltas, dailies, testing, doublingRates, emptyMap());
 
         assertEquals(expectedSummaryBlock, actualSummaryBlock.get(), "Summary block is not structured correctly!");
@@ -142,7 +142,7 @@ public class AlertTextTests {
         Map<String, String> doublingRates = new HashMap<>();
         doublingRates.put("Delhi", "250");
         Map<String, StatewiseTestData> testing = new HashMap<>();
-        testing.put("Delhi", new StatewiseTestData("51161", "", "", "", "", "1621", "", "", "Delhi", "", "", "", "", "53166", "384", "26/04/2020", "19462", "38"));
+        testing.put("Delhi", new StatewiseTestData("51161", "", "", "", "", "1621", "", "", "", "Delhi", "", "", "", "", "53166", "384", "26/04/2020", "19462", "38"));
         Map<String, List<DistrictwiseData>> districtsData = new HashMap<>();
         districtsData.put("Delhi", districts);
 

@@ -173,11 +173,11 @@ public class Visualizer {
         DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy").withZone(of("UTC"));
         DateTimeFormatter monthDayFormatter = DateTimeFormatter.ofPattern("MMM dd").withZone(of("UTC"));
 
-        List<String> interestingStates = asList("Maharashtra", "Gujarat", "Delhi", "Madhya Pradesh", "Rajasthan");
+        List<String> interestingStates = asList("Maharashtra", "Gujarat", "Delhi", "Tamil Nadu", "Rajasthan");
         List<String> colors = asList(RED, YELLOW, GREEN, BLUE, ORANGE, PURPLE);
 
         Map<String, Map<String, Long>> data = new LinkedHashMap<>();
-        for (long deltaDays = 14L; deltaDays >= 1L; deltaDays--) {
+        for (long deltaDays = 31L; deltaDays >= 1L; deltaDays--) {
             String day = dateTimeFormatter.format(Instant.now().minus(deltaDays, DAYS));
             String monthDay = monthDayFormatter.format(Instant.now().minus(deltaDays, DAYS));
             final KeyValueIterator<StateAndDate, StatewiseDelta> all = stateStores.dailyCount();

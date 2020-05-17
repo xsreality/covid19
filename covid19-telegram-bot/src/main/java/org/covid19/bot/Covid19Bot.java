@@ -199,7 +199,7 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
         return Ability
                 .builder()
                 .name("start")
-                .info("Subscribe to Covid19 India patient alerts")
+                .info("Subscribe to Covid19 India Updates")
                 .locality(ALL)
                 .privacy(PUBLIC)
                 .input(0)
@@ -215,13 +215,13 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
                                 new UserPrefs(String.valueOf(userId), emptyList(), true));
                     }
 
-                    String message = newUser ?
-                            "Congratulations! You are now subscribed to Covid19 India Patient alerts!\n\nChoose your preferred state with /mystate\n\nSend /stats to get statistics.\n\nStay safe and keep social distancing!"
-                            : "You are already subscribed to Covid19 India Patient alerts!\n\nChoose your preferred state with /mystate\n\nSend /stats to get statistics.";
+                    String message = "Welcome to COVID19 India Updates!\n\n" +
+                            "To automatically receive updates, choose your preferred states (upto 3) by sending /mystate.\n\n" +
+                            "Send /stats to get statistics of any state.\n\nStay safe and keep social distancing!";
                     silent.send(message, ctx.chatId());
                 })
                 .post(ctx -> {
-                    String message = String.format("User %s (%d) subscribed to Covid19 India Patient alerts",
+                    String message = String.format("User %s (%d) subscribed to Covid19 India Updates",
                             translateName(ctx.update().getMessage().getChat()), ctx.user().getId());
                     silent.send(message, CHANNEL_ID);
                 })
@@ -233,7 +233,7 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
         return Ability
                 .builder()
                 .name("stop")
-                .info("Un-subscribe from Covid19 India patient alerts")
+                .info("Un-subscribe from Covid19 India Updates")
                 .locality(ALL)
                 .privacy(PUBLIC)
                 .input(0)
@@ -252,12 +252,12 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
 
 
                     String message = existingUser ?
-                            "You have been unsubscribed from Covid19 India Patient alerts. Avoid information overload. Stay safe and keep social distancing!"
-                            : "You are not yet subscribed to Covid19 India Patient alerts! Subscribe with /start";
+                            "You have been unsubscribed from Covid19 India Updates. Avoid information overload. Stay safe and keep social distancing!"
+                            : "You are not yet subscribed to Covid19 India Updates! Subscribe with /start";
                     silent.send(message, ctx.chatId());
                 })
                 .post(ctx -> {
-                    String message = String.format("User %s (%d) unsubscribed from Covid19 India Patient alerts",
+                    String message = String.format("User %s (%d) unsubscribed from Covid19 India Updates",
                             translateName(ctx.update().getMessage().getChat()), ctx.user().getId());
                     silent.send(message, CHANNEL_ID);
                 })
@@ -474,7 +474,7 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
         return Ability
                 .builder()
                 .name("dbsummary")
-                .info("Subscribe to Covid19 India patient alerts")
+                .info("Subscribe to Covid19 India Updates")
                 .locality(USER)
                 .privacy(CREATOR)
                 .input(0)
@@ -488,7 +488,7 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
 
     public Ability manuallyAdd() {
         return Ability
-                .builder().name("add").info("Manually subscribe a user to Covid19 India patient alerts")
+                .builder().name("add").info("Manually subscribe a user to Covid19 India Updates")
                 .locality(USER).privacy(CREATOR).input(1)
                 .action(ctx -> {
                     List<String> subscribedUsers = db.getList(SUBSCRIBED_USERS);
@@ -509,7 +509,7 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
 
     public Ability manuallyRemove() {
         return Ability
-                .builder().name("remove").info("Manually unsubscribe a user to Covid19 India patient alerts")
+                .builder().name("remove").info("Manually unsubscribe a user to Covid19 India Updates")
                 .locality(USER).privacy(CREATOR).input(1)
                 .action(ctx -> {
                     List<String> subscribedUsers = db.getList(SUBSCRIBED_USERS);
@@ -532,13 +532,13 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
 
     public Ability listSubscribedUsers() {
         return Ability
-                .builder().name("list").info("List all subscribed users of Covid19 India patient alerts")
+                .builder().name("list").info("List all subscribed users of Covid19 India Updates")
                 .locality(USER).privacy(CREATOR).input(0)
                 .action(ctx -> {
                     List<String> subscribedUsers = db.getList(SUBSCRIBED_USERS);
                     AtomicReference<String> listOfUsers = new AtomicReference<>("");
-                    subscribedUsers.forEach(user -> listOfUsers.accumulateAndGet(user, (s, s2) -> s + "\n" + s2));
-                    String message = "List of users:\n" + listOfUsers;
+                    subscribedUsers.forEach(user -> listOfUsers.accumulateAndGet(user, (s, s2) -> s + "," + s2));
+                    String message = listOfUsers.get();
                     silent.send(message, ctx.chatId());
                 })
                 .build();
@@ -706,10 +706,10 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
 
                     String message = "";
                     if (prefs.getMyStates().isEmpty()) {
-                        message = "You do not have any preferred state set. Send /mystate to choose a preferred state.";
+                        message = "You do not have any preferred state set. Send /mystate to choose preferred states.";
                     } else {
-                        message = String.format("Your preferred state is %s.\n\n" +
-                                "To clear your preferred state and receive updates of all states, send /clearmystate", prefs.getMyStates().get(0));
+                        message = String.format("Your preferred states are %s.\n\n" +
+                                "To clear your preferred state and receive updates of all states, send /clearmystate", String.join(",", prefs.getMyStates()));
                     }
                     silent.send(message, ctx.chatId());
                 }).build();
@@ -1072,14 +1072,35 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
             String chatId = String.valueOf(upd.getCallbackQuery().getMessage().getChatId());
             String state = upd.getCallbackQuery().getData();
 
-            userPrefsKafkaTemplate.send("user-preferences", getChatId(upd), new UserPrefs(chatId, singletonList(state), true));
+            UserPrefs prefs = storesManager.prefsForUser(chatId);
+            List<String> prefStates = prefs.getMyStates();
+            if (prefStates.size() >= 3) {
+                EditMessageText msg = new EditMessageText();
+                msg.setChatId(upd.getCallbackQuery().getMessage().getChatId());
+                msg.setMessageId(upd.getCallbackQuery().getMessage().getMessageId());
+                msg.setText(String.format("You already have 3 preferred states (%s). " +
+                        "To change, send /clearmystate and set different states with /mystate.", String.join(",", prefStates)));
+                silent.execute(msg);
+                return;
+            }
+
+            if (prefStates.contains(state)) {
+                EditMessageText msg = new EditMessageText();
+                msg.setChatId(upd.getCallbackQuery().getMessage().getChatId());
+                msg.setMessageId(upd.getCallbackQuery().getMessage().getMessageId());
+                msg.setText(String.format("%s is already in your preferred states. Current list: %s", state, String.join(",", prefStates)));
+                silent.execute(msg);
+                return;
+            }
+
+            prefStates.add(state);
+            userPrefsKafkaTemplate.send("user-preferences", getChatId(upd), new UserPrefs(chatId, prefStates, true));
 
             EditMessageText msg = new EditMessageText();
             msg.setChatId(upd.getCallbackQuery().getMessage().getChatId());
             msg.setMessageId(upd.getCallbackQuery().getMessage().getMessageId());
-            msg.setText(String.format("Your preferred state is set to %s. " +
-                    "You will receive updates about %s only. " +
-                    "To cancel this, send /clearmystate", state, state));
+            msg.setText(String.format("Your preferred states are set to %s.\n\n" +
+                    "You can set up to 3 preferred states. Just send /mystate again. You will receive automatic updates about these states.", String.join(",", prefStates)));
             silent.execute(msg);
 
             // send an update to Bot channel

@@ -1084,14 +1084,23 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
                 return;
             }
 
+            if (prefStates.contains(state)) {
+                EditMessageText msg = new EditMessageText();
+                msg.setChatId(upd.getCallbackQuery().getMessage().getChatId());
+                msg.setMessageId(upd.getCallbackQuery().getMessage().getMessageId());
+                msg.setText(String.format("%s is already in your preferred states. Current list: %s", state, String.join(",", prefStates)));
+                silent.execute(msg);
+                return;
+            }
+
             prefStates.add(state);
             userPrefsKafkaTemplate.send("user-preferences", getChatId(upd), new UserPrefs(chatId, prefStates, true));
 
             EditMessageText msg = new EditMessageText();
             msg.setChatId(upd.getCallbackQuery().getMessage().getChatId());
             msg.setMessageId(upd.getCallbackQuery().getMessage().getMessageId());
-            msg.setText(String.format("Your preferred states are set to %s. " +
-                    "You can set up to 3 preferred states. You will receive automatic updates about these states.", String.join(",", prefStates)));
+            msg.setText(String.format("Your preferred states are set to %s.\n\n" +
+                    "You can set up to 3 preferred states. Just send /mystate again. You will receive automatic updates about these states.", String.join(",", prefStates)));
             silent.execute(msg);
 
             // send an update to Bot channel

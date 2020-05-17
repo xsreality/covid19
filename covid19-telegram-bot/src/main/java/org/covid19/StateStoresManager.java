@@ -50,6 +50,7 @@ public class StateStoresManager {
     public static final String STATES_TREND = "top5statestrend";
     public static final String HISTORY_TREND = "historytrend";
     public static final String TESTING_TREND = "testingtotal";
+    public static final String STATEWISE_TOTAL = "-statewisetotal";
 
     private KafkaListenerEndpointRegistry registry;
     DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy").withZone(of("UTC"));
@@ -247,5 +248,9 @@ public class StateStoresManager {
 
     public byte[] testingTrend() {
         return visualizationsStore.get(TESTING_TREND);
+    }
+
+    public byte[] statewiseTotalChart(String state) {
+        return visualizationsStore.get(state + STATEWISE_TOTAL);
     }
 }

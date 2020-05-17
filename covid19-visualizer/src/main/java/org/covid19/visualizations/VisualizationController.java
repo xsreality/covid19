@@ -28,6 +28,8 @@ public class VisualizationController {
             visualizer.testingTrend();
             Thread.sleep(1000);
             visualizer.historyTrend();
+            Thread.sleep(1000);
+            visualizer.statewiseTotal();
         } catch (InterruptedException e) {
             // ignore
         }

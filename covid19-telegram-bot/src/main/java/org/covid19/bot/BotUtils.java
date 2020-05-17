@@ -7,10 +7,13 @@ import org.covid19.StateStoresManager;
 import org.covid19.StatewiseDelta;
 import org.covid19.StatewiseTestData;
 import org.covid19.district.DistrictwiseData;
+import org.telegram.telegrambots.meta.api.methods.ParseMode;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
+import org.telegram.telegrambots.meta.api.methods.send.SendPhoto;
 import org.telegram.telegrambots.meta.api.objects.Chat;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
+import java.io.ByteArrayInputStream;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.List;
@@ -107,6 +110,33 @@ public class BotUtils {
 
             bot.execute(telegramMessage);
         } catch (TelegramApiException | InterruptedException e) {
+            LOG.error("Unable to send Telegram alert to user {}, with error {}", chatId, e.getMessage());
+        }
+    }
+
+    public static void sendTelegramAlertWithPhoto(Covid19Bot bot, String chatId, String alertText, Integer replyId, boolean notification, String state, byte[] photo) {
+        try {
+            SendMessage telegramMessage = new SendMessage()
+                    .setChatId(chatId)
+                    .setText(alertText)
+                    .enableHtml(true)
+                    .setReplyToMessageId(replyId);
+
+            telegramMessage = notification ? telegramMessage.enableNotification() : telegramMessage.disableNotification();
+
+            bot.execute(telegramMessage);
+
+            SendPhoto message = new SendPhoto()
+                    .setChatId(chatId)
+                    .setPhoto(state, new ByteArrayInputStream(photo))
+                    .setCaption(state)
+                    .setParseMode(ParseMode.HTML)
+                    .setReplyToMessageId(replyId);
+
+            message = notification ? message.enableNotification() : message.disableNotification();
+
+            bot.execute(message);
+        } catch (TelegramApiException e) {
             LOG.error("Unable to send Telegram alert to user {}, with error {}", chatId, e.getMessage());
         }
     }

@@ -27,9 +27,11 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 
 import static java.lang.Double.parseDouble;
 import static java.lang.Double.valueOf;
@@ -64,12 +66,25 @@ public class Visualizer {
     private final DateTimeFormatter monthDayFormatter = DateTimeFormatter.ofPattern("MMM dd").withZone(of("UTC"));
     private final DecimalFormat df = new DecimalFormat("0.00");
 
+    private static final String[] INDIAN_STATES = {
+            "Delhi", "Jammu and Kashmir", "Himachal Pradesh", "Chandigarh",
+            "Haryana", "Punjab", "Rajasthan", "Ladakh",
+            "Chhattisgarh", "Madhya Pradesh", "Uttar Pradesh", "Uttarakhand",
+            "Bihar", "Jharkhand", "Odisha", "West Bengal",
+            "Arunachal Pradesh", "Assam", "Manipur", "Meghalaya",
+            "Mizoram", "Nagaland", "Tripura", "Sikkim",
+            "Goa", "Gujarat", "Maharashtra", "Dadra and Nagar Haveli", "Daman and Diu",
+            "Andhra Pradesh", "Karnataka", "Kerala", "Puducherry",
+            "Tamil Nadu", "Telangana", "Andaman and Nicobar Islands", "Lakshadweep"
+    };
+
     public static final String LAST_SEVEN_DAYS_OVERVIEW = "last7daysoverview";
     public static final String LAST_TWO_WEEKS_TOTAL = "last2weekstotal";
     public static final String DOUBLING_RATE = "doublingrate";
     public static final String STATES_TREND = "top5statestrend";
     public static final String HISTORY_TREND = "historytrend";
     public static final String TESTING_TREND = "testingtotal";
+    public static final String STATEWISE_TOTAL = "-statewisetotal";
 
     public Visualizer(StateStoresManager stateStores, VisualizationService visualizationService,
                       KafkaTemplate<String, byte[]> chartsKafkaTemplate) {
@@ -240,6 +255,7 @@ public class Visualizer {
 
         List<String> days = new ArrayList<>();
         List<Double> totalCases = new ArrayList<>();
+        List<Double> active = new ArrayList<>();
         List<Double> recovered = new ArrayList<>();
         List<Double> deceased = new ArrayList<>();
         data.forEach((day, delta) -> {
@@ -248,6 +264,7 @@ public class Visualizer {
                 return;
             }
             totalCases.add(valueOf(delta.getCurrentConfirmed()));
+            active.add((double) (delta.getCurrentConfirmed() - delta.getCurrentRecovered() - delta.getCurrentDeaths()));
             recovered.add(valueOf(delta.getCurrentRecovered()));
             deceased.add(valueOf(delta.getCurrentDeaths()));
             days.add(day);
@@ -256,6 +273,7 @@ public class Visualizer {
         // create datasets
         List<ChartDataset> datasets = new ArrayList<>(asList(
                 new ChartDataset(LINE, "Total Cases", totalCases, BLUE),
+                new ChartDataset(LINE, "Active", active, YELLOW),
                 new ChartDataset(LINE, "Recovered", recovered, GREEN),
                 new ChartDataset(LINE, "Deceased", deceased, RED)));
 
@@ -345,5 +363,61 @@ public class Visualizer {
         byte[] testingImage = visualizationService.buildVisualization(testingRequestJson);
         chartsKafkaTemplate.send("visualizations", TESTING_TREND, testingImage);
 
+    }
+
+    @Scheduled(cron = "0 6 02 * * ?")
+    public void statewiseTotal() {
+        LOG.info("Generating statewise total chart");
+        DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy").withZone(of("UTC"));
+        DateTimeFormatter monthDayFormatter = DateTimeFormatter.ofPattern("MMM dd").withZone(of("UTC"));
+
+        Stream.concat(Arrays.stream(INDIAN_STATES), Stream.of("Total")).forEach(state -> {
+            Map<String, StatewiseDelta> data = new LinkedHashMap<>();
+            for (long deltaDays = 62L; deltaDays >= 1L; deltaDays--) {
+                String day = dateTimeFormatter.format(Instant.now().minus(deltaDays, DAYS));
+                String monthDay = monthDayFormatter.format(Instant.now().minus(deltaDays, DAYS));
+                StatewiseDelta count = stateStores.dailyCountFor(state, day);
+                data.put(monthDay, count);
+            }
+
+            List<String> days = new ArrayList<>();
+            List<Double> dailyActive = new ArrayList<>();
+            List<Double> dailyRecovered = new ArrayList<>();
+            List<Double> dailyDeceased = new ArrayList<>();
+            List<ChartDataset> datasets = new ArrayList<>();
+
+            data.forEach((day, delta) -> {
+                if (isNull(delta)) {
+                    return;
+                }
+                days.add(day);
+                dailyActive.add((double) (delta.getCurrentConfirmed() - delta.getCurrentRecovered() - delta.getCurrentDeaths()));
+                dailyRecovered.add(valueOf(delta.getCurrentRecovered()));
+                dailyDeceased.add(valueOf(delta.getCurrentDeaths()));
+                LOG.info("For day {}, count {}", day, delta);
+            });
+
+            datasets.add(new ChartDataset("bar", "Active", dailyActive, GREY));
+            datasets.add(new ChartDataset("bar", "Deaths", dailyDeceased, RED));
+            datasets.add(new ChartDataset("bar", "Recovered", dailyRecovered, BLUE));
+
+            ChartData chartData = new ChartData(new ArrayList<>(days), datasets);
+
+            List<ChartAxis> xAxes = singletonList(new ChartAxis("bottom-x-axis", "bottom", true));
+            List<ChartAxis> yAxes = singletonList(new ChartAxis("left-y-axis", "left", true));
+
+            Chart chart = new Chart("bar", chartData, false, xAxes, yAxes);
+            ChartRequest chartRequest = new ChartRequest(chart);
+
+            final String chartRequestJson = new Gson().toJson(chartRequest, ChartRequest.class);
+            LOG.info("Request for statewise total chart ready: {}", chartRequestJson);
+            byte[] statewiseTotalImage = visualizationService.buildVisualization(chartRequestJson);
+            chartsKafkaTemplate.send("visualizations", state + STATEWISE_TOTAL, statewiseTotalImage);
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                // ignore
+            }
+        });
     }
 }

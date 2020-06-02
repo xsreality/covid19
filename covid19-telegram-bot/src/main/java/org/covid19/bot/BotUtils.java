@@ -7,20 +7,25 @@ import org.covid19.StateStoresManager;
 import org.covid19.StatewiseDelta;
 import org.covid19.StatewiseTestData;
 import org.covid19.district.DistrictwiseData;
+import org.telegram.telegrambots.meta.api.methods.ParseMode;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
+import org.telegram.telegrambots.meta.api.methods.send.SendPhoto;
 import org.telegram.telegrambots.meta.api.objects.Chat;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
+import java.io.ByteArrayInputStream;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
 
 import lombok.extern.slf4j.Slf4j;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
 import static java.lang.Long.parseLong;
+import static java.util.Arrays.asList;
 import static java.util.Collections.emptyMap;
 import static java.util.Objects.isNull;
 import static java.util.Objects.nonNull;
@@ -36,6 +41,18 @@ public class BotUtils {
     static {
         stateCodes = initStateCodes();
     }
+
+    private static final String[] INDIAN_STATES = {
+            "Delhi", "Jammu and Kashmir", "Himachal Pradesh", "Chandigarh",
+            "Haryana", "Punjab", "Rajasthan", "Ladakh",
+            "Chhattisgarh", "Madhya Pradesh", "Uttar Pradesh", "Uttarakhand",
+            "Bihar", "Jharkhand", "Odisha", "West Bengal",
+            "Arunachal Pradesh", "Assam", "Manipur", "Meghalaya",
+            "Mizoram", "Nagaland", "Tripura", "Sikkim",
+            "Goa", "Gujarat", "Maharashtra", "Dadra and Nagar Haveli", "Daman and Diu",
+            "Andhra Pradesh", "Karnataka", "Kerala", "Puducherry",
+            "Tamil Nadu", "Telangana", "Andaman and Nicobar Islands", "Lakshadweep", "State Unassigned"
+    };
 
     private static DecimalFormat decimalFormatter = new DecimalFormat("0.00");
 
@@ -107,6 +124,33 @@ public class BotUtils {
 
             bot.execute(telegramMessage);
         } catch (TelegramApiException | InterruptedException e) {
+            LOG.error("Unable to send Telegram alert to user {}, with error {}", chatId, e.getMessage());
+        }
+    }
+
+    public static void sendTelegramAlertWithPhoto(Covid19Bot bot, String chatId, String alertText, Integer replyId, boolean notification, String state, byte[] photo) {
+        try {
+            SendMessage telegramMessage = new SendMessage()
+                    .setChatId(chatId)
+                    .setText(alertText)
+                    .enableHtml(true)
+                    .setReplyToMessageId(replyId);
+
+            telegramMessage = notification ? telegramMessage.enableNotification() : telegramMessage.disableNotification();
+
+            bot.execute(telegramMessage);
+
+            SendPhoto message = new SendPhoto()
+                    .setChatId(chatId)
+                    .setPhoto(state, new ByteArrayInputStream(photo))
+                    .setCaption(state)
+                    .setParseMode(ParseMode.HTML)
+                    .setReplyToMessageId(replyId);
+
+            message = notification ? message.enableNotification() : message.disableNotification();
+
+            bot.execute(message);
+        } catch (TelegramApiException e) {
             LOG.error("Unable to send Telegram alert to user {}, with error {}", chatId, e.getMessage());
         }
     }
@@ -316,7 +360,12 @@ public class BotUtils {
 
         List<StatewiseDelta> sortedStats = new ArrayList<>();
 
-        stats.forEachRemaining(stat -> sortedStats.add(stat.value));
+        stats.forEachRemaining(stat -> {
+            if (asList(INDIAN_STATES).contains(stat.key) || "Total".equalsIgnoreCase(stat.key)) {
+                sortedStats.add(stat.value);
+            }
+        });
+
         if (daily) {
             sortedStats.sort((o1, o2) -> (int) (o2.getDeltaConfirmed() - o1.getDeltaConfirmed()));
         } else {

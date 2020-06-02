@@ -40,6 +40,7 @@ import static org.covid19.bot.BotUtils.buildStateSummary;
 import static org.covid19.bot.BotUtils.buildStateSummaryAlertText;
 import static org.covid19.bot.BotUtils.buildSummaryAlertBlock;
 import static org.covid19.bot.BotUtils.sendTelegramAlert;
+import static org.covid19.bot.BotUtils.sendTelegramAlertWithPhoto;
 
 @Configuration
 @Slf4j
@@ -133,7 +134,9 @@ public class UserRequestConsumer {
             alertText.accumulateAndGet(fetchStateNewsSource(testing.get(request.getState())), (current, update) -> current + "\n\nTesting data source: " + update);
         }
 
-        sendTelegramAlert(covid19Bot, request.getChatId(), alertText.get(), null, true);
+        byte[] stateTotalChart = stateStores.statewiseTotalChart(request.getState());
+
+        sendTelegramAlertWithPhoto(covid19Bot, request.getChatId(), alertText.get(), null, true, request.getState(), stateTotalChart);
     }
 
     private String buildSpecificDateSummary(String date) {

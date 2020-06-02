@@ -44,6 +44,7 @@ import static java.lang.Integer.parseInt;
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;
+import static java.util.Objects.isNull;
 import static org.covid19.bot.BotUtils.buildDistrictSummaryAlertText;
 import static org.covid19.bot.BotUtils.buildDistrictZoneText;
 import static org.covid19.bot.BotUtils.translateName;
@@ -1073,7 +1074,11 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
             String state = upd.getCallbackQuery().getData();
 
             UserPrefs prefs = storesManager.prefsForUser(chatId);
+            if (isNull(prefs)) {
+                prefs = new UserPrefs(chatId, emptyList(), true);
+            }
             List<String> prefStates = prefs.getMyStates();
+
             if (prefStates.size() >= 3) {
                 EditMessageText msg = new EditMessageText();
                 msg.setChatId(upd.getCallbackQuery().getMessage().getChatId());

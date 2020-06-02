@@ -68,6 +68,7 @@ public class Utils {
         stateCodes.put("Ladakh", "LDK");
         stateCodes.put("Lakshadweep", "LDWP");
         stateCodes.put("Puducherry", "Pudu");
+        stateCodes.put("State Unassigned", "Unass");
         return stateCodes;
     }
 

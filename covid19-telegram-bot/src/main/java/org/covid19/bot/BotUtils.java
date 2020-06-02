@@ -19,11 +19,13 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
 
 import lombok.extern.slf4j.Slf4j;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
 import static java.lang.Long.parseLong;
+import static java.util.Arrays.asList;
 import static java.util.Collections.emptyMap;
 import static java.util.Objects.isNull;
 import static java.util.Objects.nonNull;
@@ -39,6 +41,18 @@ public class BotUtils {
     static {
         stateCodes = initStateCodes();
     }
+
+    private static final String[] INDIAN_STATES = {
+            "Delhi", "Jammu and Kashmir", "Himachal Pradesh", "Chandigarh",
+            "Haryana", "Punjab", "Rajasthan", "Ladakh",
+            "Chhattisgarh", "Madhya Pradesh", "Uttar Pradesh", "Uttarakhand",
+            "Bihar", "Jharkhand", "Odisha", "West Bengal",
+            "Arunachal Pradesh", "Assam", "Manipur", "Meghalaya",
+            "Mizoram", "Nagaland", "Tripura", "Sikkim",
+            "Goa", "Gujarat", "Maharashtra", "Dadra and Nagar Haveli", "Daman and Diu",
+            "Andhra Pradesh", "Karnataka", "Kerala", "Puducherry",
+            "Tamil Nadu", "Telangana", "Andaman and Nicobar Islands", "Lakshadweep", "State Unassigned"
+    };
 
     private static DecimalFormat decimalFormatter = new DecimalFormat("0.00");
 
@@ -346,7 +360,12 @@ public class BotUtils {
 
         List<StatewiseDelta> sortedStats = new ArrayList<>();
 
-        stats.forEachRemaining(stat -> sortedStats.add(stat.value));
+        stats.forEachRemaining(stat -> {
+            if (asList(INDIAN_STATES).contains(stat.key) || "Total".equalsIgnoreCase(stat.key)) {
+                sortedStats.add(stat.value);
+            }
+        });
+
         if (daily) {
             sortedStats.sort((o1, o2) -> (int) (o2.getDeltaConfirmed() - o1.getDeltaConfirmed()));
         } else {

@@ -188,7 +188,7 @@ public class StatsAlertConsumerConfig {
         });
     }
 
-    @Scheduled(cron = "0 20 4,8,12,16,18 * * ?")
+    @Scheduled(cron = "0 20 16 * * ?")
     public void sendSummaryUpdates() {
         String text = buildStateSummary(false, stateStores);
 

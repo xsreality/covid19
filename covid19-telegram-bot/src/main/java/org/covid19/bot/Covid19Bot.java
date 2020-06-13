@@ -173,7 +173,7 @@ public class Covid19Bot extends AbilityBot implements ApplicationContextAware {
                     String msg = "Send /stats to get latest count of any State or Total\n\n" +
                             "Send /mystate to choose your preferred state and receive updates automatically.\n\n" +
                             "Send /district to get latest district numbers of any state.\n\n" +
-                            "SSend /location to get zone information of your location.\n\n" +
+                            "Send /location to get zone information of your location.\n\n" +
                             "Send /zones to get latest red, orange, green zones of any district\n\n" +
                             "Send /charts to get different charts and visualizations.\n\n";
                     silent.send(msg, ctx.chatId());

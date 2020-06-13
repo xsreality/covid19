@@ -145,9 +145,6 @@ public class StateStoresManager {
             if (!state.equalsIgnoreCase(next.key.getState())) {
                 continue;
             }
-            if ("Unknown".equalsIgnoreCase(next.key.getDistrict())) {
-                continue;
-            }
             data.add(next.value);
         }
         return data;

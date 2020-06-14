@@ -93,13 +93,15 @@ public class UserRequestConsumer {
             return;
         }
         if ("Today".equalsIgnoreCase(request.getState())) {
-            sendTelegramAlert(covid19Bot, request.getChatId(), buildStateSummary(true, stateStores), null, true);
+            byte[] todayChart = stateStores.today();
+            sendTelegramAlertWithPhoto(covid19Bot, request.getChatId(), buildStateSummary(true, stateStores), null, true, "Cases for today", todayChart);
             return;
         }
         if ("Yesterday".equalsIgnoreCase(request.getState())) {
             DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy").withZone(of("UTC"));
             String yesterday = dateTimeFormatter.format(Instant.now().minus(1, DAYS));
-            sendTelegramAlert(covid19Bot, request.getChatId(), buildSpecificDateSummary(yesterday), null, true);
+            byte[] yesterdayChart = stateStores.yesterday();
+            sendTelegramAlertWithPhoto(covid19Bot, request.getChatId(), buildSpecificDateSummary(yesterday), null, true, "Cases for " + yesterday, yesterdayChart);
             return;
         }
 

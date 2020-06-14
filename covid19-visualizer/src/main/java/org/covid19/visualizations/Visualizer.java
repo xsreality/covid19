@@ -85,6 +85,8 @@ public class Visualizer {
     public static final String HISTORY_TREND = "historytrend";
     public static final String TESTING_TREND = "testingtotal";
     public static final String STATEWISE_TOTAL = "-statewisetotal";
+    public static final String TODAY = "today";
+    public static final String YESTERDAY = "yesterday";
 
     public Visualizer(StateStoresManager stateStores, VisualizationService visualizationService,
                       KafkaTemplate<String, byte[]> chartsKafkaTemplate) {
@@ -93,7 +95,7 @@ public class Visualizer {
         this.chartsKafkaTemplate = chartsKafkaTemplate;
     }
 
-    @Scheduled(cron = "0 0 02 * * ?")
+    @Scheduled(cron = "0 0 0 * * ?")
     public void dailyAndTotalCharts() {
         LOG.info("Generating visualization for last 7 days overview");
         Map<String, StatewiseDelta> data = new LinkedHashMap<>();
@@ -149,7 +151,7 @@ public class Visualizer {
         chartsKafkaTemplate.send("visualizations", LAST_TWO_WEEKS_TOTAL, cumulativeImage);
     }
 
-    @Scheduled(cron = "0 2 02 * * ?")
+    @Scheduled(cron = "0 2 0 * * ?")
     public void doublingRateChart() {
         LOG.info("Generating doubling rate chart");
         Map<String, String> data = new LinkedHashMap<>();
@@ -182,7 +184,7 @@ public class Visualizer {
         chartsKafkaTemplate.send("visualizations", DOUBLING_RATE, doublingRateImage);
     }
 
-    @Scheduled(cron = "0 3 02 * * ?")
+    @Scheduled(cron = "0 3 0 * * ?")
     public void top5StatesTrend() {
         LOG.info("Generating top 5 states trend chart");
         DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy").withZone(of("UTC"));
@@ -235,7 +237,7 @@ public class Visualizer {
         chartsKafkaTemplate.send("visualizations", STATES_TREND, statesTrendImage);
     }
 
-    @Scheduled(cron = "0 4 02 * * ?")
+    @Scheduled(cron = "0 4 0 * * ?")
     public void historyTrend() {
         LOG.info("Generating history trend chart");
         DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy").withZone(of("UTC"));
@@ -283,13 +285,13 @@ public class Visualizer {
         chartsKafkaTemplate.send("visualizations", HISTORY_TREND, historyTrendImage);
     }
 
-    @Scheduled(cron = "0 5 02 * * ?")
+    @Scheduled(cron = "0 5 0 * * ?")
     public void testingTrend() {
         LOG.info("Generating testing chart");
         DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy").withZone(of("UTC"));
         DateTimeFormatter monthDayFormatter = DateTimeFormatter.ofPattern("MMM dd").withZone(of("UTC"));
 
-        final LocalDate startDate = dateTimeFormatter.parse("01/04/2020", LocalDate::from);// data available from here
+        final LocalDate startDate = dateTimeFormatter.parse("15/05/2020", LocalDate::from);// data available from here
         final LocalDate today = LocalDate.now();
         Map<String, StatewiseTestData> dailyTestedData = new LinkedHashMap<>();
         Map<String, StatewiseDelta> dailyPositiveData = new LinkedHashMap<>();
@@ -365,7 +367,7 @@ public class Visualizer {
 
     }
 
-    @Scheduled(cron = "0 6 02 * * ?")
+    @Scheduled(cron = "0 6 0 * * ?")
     public void statewiseTotal() {
         LOG.info("Generating statewise total chart");
         DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy").withZone(of("UTC"));
@@ -419,5 +421,119 @@ public class Visualizer {
                 // ignore
             }
         });
+    }
+
+    @Scheduled(cron = "0 2/15 4-19 * * ?")
+    public void today() {
+        LOG.info("Generating chart for today's stats");
+        DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy").withZone(of("UTC"));
+        DateTimeFormatter monthDayFormatter = DateTimeFormatter.ofPattern("MMM dd").withZone(of("UTC"));
+        String today = dateTimeFormatter.format(Instant.now());
+        String todayText = monthDayFormatter.format(Instant.now());
+
+        List<StatewiseDelta> data = new ArrayList<>();
+
+        Arrays.stream(INDIAN_STATES).forEach(state -> {
+            StatewiseDelta delta = stateStores.dailyCountFor(state, today);
+            if (isNull(delta) || isNegative(delta) || notYetUpdated(delta)) {
+                return;
+            }
+            data.add(delta);
+        });
+
+        data.sort((o1, o2) -> (int) (o2.getDeltaConfirmed() - o1.getDeltaConfirmed()));
+
+        List<String> states = new ArrayList<>();
+        List<Double> dailyActive = new ArrayList<>();
+        List<Double> dailyRecovered = new ArrayList<>();
+        List<Double> dailyDeaths = new ArrayList<>();
+        List<ChartDataset> datasets = new ArrayList<>();
+
+        data.forEach((delta) -> {
+            LOG.info("For state {}, count {}", delta.getState(), delta);
+            states.add(delta.getState());
+            dailyActive.add((double) (active(delta) < 0 ? 0 : active(delta)));
+            dailyRecovered.add(valueOf(delta.getDeltaRecovered()));
+            dailyDeaths.add(valueOf(delta.getDeltaDeaths()));
+        });
+
+        datasets.add(new ChartDataset("horizontalBar", "Active", dailyActive, GREY));
+        datasets.add(new ChartDataset("horizontalBar", "Recovered", dailyRecovered, BLUE));
+        datasets.add(new ChartDataset("horizontalBar", "Deaths", dailyDeaths, RED));
+
+        ChartData chartData = new ChartData(new ArrayList<>(states), datasets);
+        List<ChartAxis> xAxes = singletonList(new ChartAxis("bottom-x-axis", "bottom", true));
+        List<ChartAxis> yAxes = singletonList(new ChartAxis("left-y-axis", "left", true));
+
+        Chart chart = new Chart("horizontalBar", chartData, false, xAxes, yAxes, todayText);
+        ChartRequest chartRequest = new ChartRequest("transparent", "1000", "600", "png", chart);
+
+        final String chartRequestJson = new Gson().toJson(chartRequest, ChartRequest.class);
+        LOG.info("Request for today trend chart ready: {}", chartRequestJson);
+        byte[] todayImage = visualizationService.buildVisualization(chartRequestJson);
+        chartsKafkaTemplate.send("visualizations", TODAY, todayImage);
+    }
+
+    @Scheduled(cron = "0 48 19 * * ?")
+    public void yesterday() {
+        LOG.info("Generating chart for yesterday's stats");
+        DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy").withZone(of("UTC"));
+        DateTimeFormatter monthDayFormatter = DateTimeFormatter.ofPattern("MMM dd").withZone(of("UTC"));
+        String yesterday = dateTimeFormatter.format(Instant.now().minus(1, DAYS));
+        String yseterdayText = monthDayFormatter.format(Instant.now().minus(1, DAYS));
+
+        List<StatewiseDelta> data = new ArrayList<>();
+
+        Arrays.stream(INDIAN_STATES).forEach(state -> {
+            StatewiseDelta delta = stateStores.dailyCountFor(state, yesterday);
+            if (isNull(delta) || isNegative(delta) || notYetUpdated(delta)) {
+                return;
+            }
+            data.add(delta);
+        });
+
+        data.sort((o1, o2) -> (int) (o2.getDeltaConfirmed() - o1.getDeltaConfirmed()));
+
+        List<String> states = new ArrayList<>();
+        List<Double> dailyActive = new ArrayList<>();
+        List<Double> dailyRecovered = new ArrayList<>();
+        List<Double> dailyDeaths = new ArrayList<>();
+        List<ChartDataset> datasets = new ArrayList<>();
+
+        data.forEach((delta) -> {
+            LOG.info("For state {}, count {}", delta.getState(), delta);
+            states.add(delta.getState());
+            dailyActive.add((double) (active(delta) < 0 ? 0 : active(delta)));
+            dailyRecovered.add(valueOf(delta.getDeltaRecovered()));
+            dailyDeaths.add(valueOf(delta.getDeltaDeaths()));
+        });
+
+        datasets.add(new ChartDataset("horizontalBar", "Active", dailyActive, GREY));
+        datasets.add(new ChartDataset("horizontalBar", "Recovered", dailyRecovered, BLUE));
+        datasets.add(new ChartDataset("horizontalBar", "Deaths", dailyDeaths, RED));
+
+        ChartData chartData = new ChartData(new ArrayList<>(states), datasets);
+        List<ChartAxis> xAxes = singletonList(new ChartAxis("bottom-x-axis", "bottom", true));
+        List<ChartAxis> yAxes = singletonList(new ChartAxis("left-y-axis", "left", true));
+
+        Chart chart = new Chart("horizontalBar", chartData, false, xAxes, yAxes, yseterdayText);
+        ChartRequest chartRequest = new ChartRequest("transparent", "1000", "600", "png", chart);
+
+        final String chartRequestJson = new Gson().toJson(chartRequest, ChartRequest.class);
+        LOG.info("Request for today trend chart ready: {}", chartRequestJson);
+        byte[] yesterdayImage = visualizationService.buildVisualization(chartRequestJson);
+        chartsKafkaTemplate.send("visualizations", YESTERDAY, yesterdayImage);
+    }
+
+    private boolean isNegative(StatewiseDelta delta) {
+        return delta.getDeltaConfirmed() < 0 || delta.getDeltaRecovered() < 0 || delta.getDeltaDeaths() < 0;
+    }
+
+    private long active(StatewiseDelta delta) {
+        return delta.getDeltaConfirmed() - delta.getDeltaRecovered() - delta.getDeltaDeaths();
+    }
+
+    private boolean notYetUpdated(StatewiseDelta delta) {
+        return delta.getDeltaConfirmed() == 0 && delta.getDeltaRecovered() == 0 && delta.getDeltaDeaths() == 0;
     }
 }

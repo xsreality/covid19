@@ -34,4 +34,23 @@ public class VisualizationController {
             // ignore
         }
     }
+
+    @ResponseStatus(code = OK)
+    @GetMapping("/today")
+    public void today() {
+        visualizer.today();
+    }
+
+    @ResponseStatus(code = OK)
+    @GetMapping("/yesterday")
+    public void yesterday() {
+        visualizer.yesterday();
+    }
+
+
+    @ResponseStatus(code = OK)
+    @GetMapping("/testing")
+    public void testing() {
+        visualizer.testingTrend();
+    }
 }

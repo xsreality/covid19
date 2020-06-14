@@ -20,13 +20,20 @@ public class Chart {
         this.type = type;
         this.data = data;
         PluginDatalabel datalabel = new PluginDatalabel(displayLabels, "end", "#ccc", "3", "end");
-        this.options = new ChartOption(new ChartPlugin(datalabel), new ChartScale());
+        this.options = new ChartOption(new ChartPlugin(datalabel), new ChartScale(), new ChartTitle(false, ""));
     }
 
     public Chart(String type, ChartData data, boolean displayLabels, List<ChartAxis> xAxes, List<ChartAxis> yAxes) {
         this.type = type;
         this.data = data;
         PluginDatalabel datalabel = new PluginDatalabel(displayLabels, "end", "#ccc", "3", "end");
-        this.options = new ChartOption(new ChartPlugin(datalabel), new ChartScale(xAxes, yAxes));
+        this.options = new ChartOption(new ChartPlugin(datalabel), new ChartScale(xAxes, yAxes), new ChartTitle(false, ""));
+    }
+
+    public Chart(String type, ChartData data, boolean displayLabels, List<ChartAxis> xAxes, List<ChartAxis> yAxes, String title) {
+        this.type = type;
+        this.data = data;
+        PluginDatalabel datalabel = new PluginDatalabel(displayLabels, "end", "#ccc", "3", "end");
+        this.options = new ChartOption(new ChartPlugin(datalabel), new ChartScale(xAxes, yAxes), new ChartTitle(true, title));
     }
 }

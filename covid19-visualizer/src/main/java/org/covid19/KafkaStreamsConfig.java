@@ -55,7 +55,7 @@ public class KafkaStreamsConfig {
         return streamsBuilder.table("statewise-daily-stats",
                 Materialized.<String, StatewiseDelta, KeyValueStore<Bytes, byte[]>>as(
                         Stores.persistentKeyValueStore("statewise-daily-persistent").name())
-                        .withKeySerde(Serdes.String()).withValueSerde(new StatewiseDeltaSerde()).withCachingDisabled());
+                        .withKeySerde(Serdes.String()).withValueSerde(new StatewiseDeltaSerde()));
     }
 
     @Bean
@@ -63,7 +63,7 @@ public class KafkaStreamsConfig {
         return streamsBuilder.table("statewise-delta-stats",
                 Materialized.<String, StatewiseDelta, KeyValueStore<Bytes, byte[]>>as(
                         Stores.persistentKeyValueStore("statewise-delta-persistent").name())
-                        .withKeySerde(stringSerde).withValueSerde(new StatewiseDeltaSerde()).withCachingDisabled());
+                        .withKeySerde(stringSerde).withValueSerde(new StatewiseDeltaSerde()));
     }
 
     @Bean
@@ -71,7 +71,7 @@ public class KafkaStreamsConfig {
         return streamsBuilder.table("districtwise-daily",
                 Materialized.<StateAndDistrict, DistrictwiseData, KeyValueStore<Bytes, byte[]>>as(
                         Stores.persistentKeyValueStore("districtwise-daily-persistent").name())
-                        .withKeySerde(new StateAndDistrictSerde()).withValueSerde(new DistrictwiseDataSerde()).withCachingDisabled());
+                        .withKeySerde(new StateAndDistrictSerde()).withValueSerde(new DistrictwiseDataSerde()));
     }
 
     @Bean
@@ -79,7 +79,7 @@ public class KafkaStreamsConfig {
         return streamsBuilder.table("districtwise-delta",
                 Materialized.<StateAndDistrict, DistrictwiseData, KeyValueStore<Bytes, byte[]>>as(
                         Stores.persistentKeyValueStore("districtwise-delta-persistent").name())
-                        .withKeySerde(new StateAndDistrictSerde()).withValueSerde(new DistrictwiseDataSerde()).withCachingDisabled());
+                        .withKeySerde(new StateAndDistrictSerde()).withValueSerde(new DistrictwiseDataSerde()));
     }
 
     @Bean
@@ -119,6 +119,6 @@ public class KafkaStreamsConfig {
         return streamsBuilder.table("visualizations",
                 Materialized.<String, byte[], KeyValueStore<Bytes, byte[]>>as(
                         Stores.persistentKeyValueStore("visualizations-persistent").name())
-                        .withKeySerde(stringSerde).withValueSerde(Serdes.ByteArray()).withCachingDisabled());
+                        .withKeySerde(stringSerde).withValueSerde(Serdes.ByteArray()));
     }
 }

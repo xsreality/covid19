@@ -55,7 +55,7 @@ public class StateStoresManager {
                                     KTable<StateAndDistrict, DistrictwiseData> districtDeltaTable,
                                     KTable<StateAndDistrict, String> districtZonesTable) {
         return args -> {
-            latch(fb).await(100, TimeUnit.SECONDS);
+            latch(fb).await(1000, TimeUnit.SECONDS);
             dailyStatsStore = fb.getKafkaStreams().store(dailyStatsTable.queryableStoreName(), QueryableStoreTypes.keyValueStore());
             districtDailyStore = fb.getKafkaStreams().store(districtDailyTable.queryableStoreName(), QueryableStoreTypes.keyValueStore());
             districtDeltaStore = fb.getKafkaStreams().store(districtDeltaTable.queryableStoreName(), QueryableStoreTypes.keyValueStore());

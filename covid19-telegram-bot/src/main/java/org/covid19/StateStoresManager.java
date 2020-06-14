@@ -51,6 +51,8 @@ public class StateStoresManager {
     public static final String HISTORY_TREND = "historytrend";
     public static final String TESTING_TREND = "testingtotal";
     public static final String STATEWISE_TOTAL = "-statewisetotal";
+    public static final String TODAY = "today";
+    public static final String YESTERDAY = "yesterday";
 
     private KafkaListenerEndpointRegistry registry;
     DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy").withZone(of("UTC"));
@@ -252,5 +254,13 @@ public class StateStoresManager {
 
     public byte[] statewiseTotalChart(String state) {
         return visualizationsStore.get(state + STATEWISE_TOTAL);
+    }
+
+    public byte[] today() {
+        return visualizationsStore.get(TODAY);
+    }
+
+    public byte[] yesterday() {
+        return visualizationsStore.get(YESTERDAY);
     }
 }

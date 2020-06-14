@@ -12,4 +12,5 @@ import lombok.ToString;
 public class ChartOption {
     private ChartPlugin plugins;
     private ChartScale scales;
+    private ChartTitle title;
 }

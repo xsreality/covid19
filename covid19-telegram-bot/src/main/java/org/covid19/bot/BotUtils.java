@@ -19,7 +19,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.stream.Collectors;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -128,7 +127,7 @@ public class BotUtils {
         }
     }
 
-    public static void sendTelegramAlertWithPhoto(Covid19Bot bot, String chatId, String alertText, Integer replyId, boolean notification, String state, byte[] photo) {
+    public static void sendTelegramAlertWithPhoto(Covid19Bot bot, String chatId, String alertText, Integer replyId, boolean notification, String caption, byte[] photo) {
         try {
             SendMessage telegramMessage = new SendMessage()
                     .setChatId(chatId)
@@ -142,8 +141,8 @@ public class BotUtils {
 
             SendPhoto message = new SendPhoto()
                     .setChatId(chatId)
-                    .setPhoto(state, new ByteArrayInputStream(photo))
-                    .setCaption(state)
+                    .setPhoto(caption, new ByteArrayInputStream(photo))
+                    .setCaption(caption)
                     .setParseMode(ParseMode.HTML)
                     .setReplyToMessageId(replyId);
 
@@ -151,7 +150,7 @@ public class BotUtils {
 
             bot.execute(message);
         } catch (TelegramApiException e) {
-            LOG.error("Unable to send Telegram alert to user {}, with error {}", chatId, e.getMessage());
+            LOG.error("Unable to send Telegram alert to user {}, with error {}", chatId, e.getCause().getMessage());
         }
     }
 

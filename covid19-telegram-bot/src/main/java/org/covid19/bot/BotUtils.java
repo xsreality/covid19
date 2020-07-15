@@ -288,15 +288,15 @@ public class BotUtils {
         String text = String.format("<i>%s</i>\n\n", friendlyTime(lastUpdated));
         text = text.concat("Summary of all affected Indian States\n\n");
         text = text.concat("<pre>\n");
-        text = text.concat("State|  Conf|  Rec.| Died\n");
-        text = text.concat("-------------------------\n");
+        text = text.concat("State|   Conf|   Rec.|  Died\n");
+        text = text.concat("----------------------------\n");
         for (StatewiseDelta stat : sortedStats) {
             if ("Total".equalsIgnoreCase(stat.getState())) {
                 total = stat;
                 continue; // show total at the end
             }
             if (daily) {
-                if (stat.getDeltaConfirmed() < 1L && stat.getDeltaRecovered() < 1L && stat.getDeltaDeaths() < 1L) {
+                if (stat.getDeltaConfirmed() == 0L && stat.getDeltaRecovered() == 0L && stat.getDeltaDeaths() == 0L) {
                     continue; // skip states with zero stats
                 }
             } else {
@@ -304,14 +304,14 @@ public class BotUtils {
                     continue; // skip states with zero stats
                 }
             }
-            text = text.concat(String.format("%-5s|%6s|%6s|%5s\n",
+            text = text.concat(String.format("%-5s|%7s|%7s|%6s\n",
                     stateCodes.get(stat.getState()),
                     daily ? stat.getDeltaConfirmed() : stat.getCurrentConfirmed(),
                     daily ? stat.getDeltaRecovered() : stat.getCurrentRecovered(),
                     daily ? stat.getDeltaDeaths() : stat.getCurrentDeaths()));
         }
-        text = text.concat("-------------------------\n");
-        text = text.concat(String.format("%-5s|%6s|%6s|%5s\n",
+        text = text.concat("----------------------------\n");
+        text = text.concat(String.format("%-5s|%7s|%7s|%6s\n",
                 stateCodes.get(total.getState()),
                 daily ? total.getDeltaConfirmed() : total.getCurrentConfirmed(),
                 daily ? total.getDeltaRecovered() : total.getCurrentRecovered(),
@@ -323,14 +323,14 @@ public class BotUtils {
     public static String buildDistrictSummaryAlertText(String state, List<DistrictwiseData> districts) {
         String text = String.format("Summary of all districts of %s\n\n", state);
         text = text.concat("<pre>\n");
-        text = text.concat("District         | Conf| Rec.| Died\n");
-        text = text.concat("-----------------------------------\n");
+        text = text.concat("District     |  Conf|  Rec.| Died\n");
+        text = text.concat("---------------------------------\n");
         for (DistrictwiseData district : districts) {
-            text = text.concat(String.format("%-17s|%5s|%5s|%5s\n",
-                    fixedLength(district.getDistrict(), 17),
+            text = text.concat(String.format("%-13s|%6s|%6s|%5s\n",
+                    fixedLength(district.getDistrict(), 13),
                     district.getConfirmed(), district.getRecovered(), district.getDeceased()));
         }
-        text = text.concat("-----------------------------------\n");
+        text = text.concat("---------------------------------\n");
         text = text.concat("</pre>");
         return text;
     }

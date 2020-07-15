@@ -474,7 +474,7 @@ public class Visualizer {
         chartsKafkaTemplate.send("visualizations", TODAY, todayImage);
     }
 
-    @Scheduled(cron = "0 48 19 * * ?")
+    @Scheduled(cron = "0 10 0 * * ?")
     public void yesterday() {
         LOG.info("Generating chart for yesterday's stats");
         DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy").withZone(of("UTC"));

@@ -31,4 +31,13 @@ public class BotUtilsTest {
         String actual = buildDistrictZoneText(state, data);
         assertEquals(expected, actual);
     }
+
+    @Test
+    public void friendlyTimeTest() {
+        String lastUpdatedWithDoubleDigit = "05/12/2020 00:15:03";
+        String lastUpdatedWithSingleDigit = "5/12/2020 00:15:03";
+        String expected = "December 05, 12:15 AM";
+        assertEquals(expected, Utils.friendlyTime(lastUpdatedWithDoubleDigit));
+        assertEquals(expected, Utils.friendlyTime(lastUpdatedWithSingleDigit));
+    }
 }

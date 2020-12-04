@@ -4,11 +4,15 @@ import org.apache.commons.lang3.tuple.Pair;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
 public class Utils {
     public static <A, B> List<Pair<A, B>> zip(List<A> listA, List<B> listB) {
         if (listA.size() != listB.size()) {
@@ -24,8 +28,13 @@ public class Utils {
     }
 
     public static String friendlyTime(String lastUpdated) {
-        final LocalDateTime localDateTime = LocalDateTime.parse(lastUpdated, DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss"));
-        return localDateTime.format(DateTimeFormatter.ofPattern("MMMM dd, hh:mm a"));
+        try {
+            final LocalDateTime localDateTime = LocalDateTime.parse(lastUpdated, DateTimeFormatter.ofPattern("d/MM/yyyy HH:mm:ss"));
+            return localDateTime.format(DateTimeFormatter.ofPattern("MMMM dd, hh:mm a"));
+        } catch (DateTimeParseException e) {
+            LOG.warn("Error parsing date '{}' with error {}", lastUpdated, e);
+            return null;
+        }
     }
 
     public static Map<String, String> initStateCodes() {
